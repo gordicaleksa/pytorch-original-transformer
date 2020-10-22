@@ -1,4 +1,6 @@
 # todo: add positional encoding visualization to README
+# todo: figure out why I didn't have to add padding
+
 
 import math
 import torch

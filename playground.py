@@ -7,7 +7,7 @@ from original_transformer import PositionalEncoding
 
 def visualize_positional_encodings():
     # Create a PositionalEncoding object instance
-    pe = PositionalEncoding(model_dimension=512, dropout=0.1)
+    pe = PositionalEncoding(model_dimension=512, dropout_probability=0.1)
 
     # Extract the positional encodings table
     positional_encodings_table = pe.positional_encodings_table.numpy()

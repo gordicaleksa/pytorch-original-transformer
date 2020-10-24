@@ -9,6 +9,7 @@
 # todo: take a look at the naming used in the original paper
 # todo: use built-in blocks but implement them myself also
 # todo: a must: implement simple, dedicated multi-headed SELF-attention
+# todo: add a jupyter notebook
 
 # todo: do it like this better then annotated transformer imp
 # attn_output_weights = torch.bmm(q, k.transpose(1, 2))
@@ -23,10 +24,17 @@
 # attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
 #     attn_output = linear(attn_output, out_proj_weight, out_proj_bias)
 
+# todo: create this in a similar fashion to GANs repo
 """
     Contains the implementation of the original transformer paper "Attention is all you need".
 
+    Certain modifications:
+    1. LayerNorm
+    2. Dropout
+
     Paper link: https://arxiv.org/pdf/1706.03762.pdf
+
+    Prerequisite theory: https://jalammar.github.io/illustrated-transformer/ (amazing blog!)
 
 """
 
@@ -66,15 +74,6 @@ class Transformer(nn.Module):
         return tgt_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities
 
 
-def get_clones(module, num_of_deep_copies):
-    # Create deep copies so that we can tweak each module's weights independently
-    return nn.ModuleList([copy.deepcopy(module) for _ in range(num_of_deep_copies)])
-
-
-# Note: the original paper had LayerNorm AFTER the residual connection and addition operation
-# multiple experiments I found showed that it's more effective to do it before
-def sublayer_wrapper(representations_batch, sublayer_function):
-    return representations_batch + sublayer_function(sublayer_function)
 #
 # Encoder architecture
 #
@@ -104,6 +103,8 @@ class EncoderLayer(nn.Module):
 
     def __init__(self):
         super().__init__()
+        self.multiheaded_attention_sublayer =
+        self.pointwise_net_sublayer = Sublayer
 
     def forward(self, src_embeddings_batch, src_mask):
 
@@ -140,6 +141,47 @@ class DecoderLayer(nn.Module):
     def forward(self):
 
 
+#
+# Helper modules (designed with modularity in mind)
+#
+
+
+def get_clones(module, num_of_deep_copies):
+    # Create deep copies so that we can tweak each module's weights independently
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(num_of_deep_copies)])
+
+
+# Note: the original paper had LayerNorm AFTER the residual connection and addition operation
+# multiple experiments I found showed that it's more effective to do it before
+class Sublayer(nn.Module):
+    def __init__(self, sublayer_module, dropout_probability):
+        super().__init__()
+        self.sublayer_module = sublayer_module
+        self.norm = nn.LayerNorm(sublayer_module.model_dimension)
+        self.dropout = nn.Dropout(p=dropout_probability)
+
+    def forward(self, x, var_args):
+        return x + self.dropout(self.sublayer_module(self.norm(x)))
+
+
+class PositionwiseFeedForward(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self):
+        print('dummy')
+
+
+class MultiHeadedAttention(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self):
+        print('dummy')
+
+
 class Embedding(nn.Module):
 
     def __init__(self, vocab_size, model_dimension):
@@ -159,9 +201,9 @@ class Embedding(nn.Module):
 class PositionalEncoding(nn.Module):
 
     # todo: register_buffer try coding models.params() once I have the full model and check whether these could become trainable
-    def __init__(self, model_dimension, dropout, expected_max_sequence_length=5000):
+    def __init__(self, model_dimension, dropout_probability, expected_max_sequence_length=5000):
         super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
+        self.dropout = nn.Dropout(p=dropout_probability)
 
         # (stated in the paper) Use sine functions whose frequencies form a geometric progression as position encodings,
         # (learning encodings will also work!). Page 6, Chapter 3.5 "Positional Encoding"

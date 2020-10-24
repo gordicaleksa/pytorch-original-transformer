@@ -184,13 +184,12 @@ class MultiHeadedAttention(nn.Module):
             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
              for l, x in zip(self.linears, (query, key, value))]
 
+        print(query.shape)
         # 2) Apply attention on all the projected vectors in batch.
-        x, self.attn = attention(query, key, value, mask=mask,
-                                 dropout=self.dropout)
+        x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
 
         # 3) "Concat" using a view and apply a final linear.
-        x = x.transpose(1, 2).contiguous() \
-            .view(nbatches, -1, self.h * self.d_k)
+        x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
         return self.linears[-1](x)
 
 
@@ -234,8 +233,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + Variable(self.pe[:, :x.size(1)],
-                         requires_grad=False)
+        x = x + Variable(self.pe[:, :x.size(1)], requires_grad=False)
         return self.dropout(x)
 
 
@@ -276,16 +274,14 @@ class Batch:
         if trg is not None:
             self.trg = trg[:, :-1]
             self.trg_y = trg[:, 1:]
-            self.trg_mask = \
-                self.make_std_mask(self.trg, pad)
+            self.trg_mask = self.make_std_mask(self.trg, pad)
             self.ntokens = (self.trg_y != pad).data.sum()
 
     @staticmethod
     def make_std_mask(tgt, pad):
         "Create a mask to hide padding and future words."
         tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+        tgt_mask = tgt_mask & Variable(subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
         return tgt_mask
 
 
@@ -311,18 +307,18 @@ def run_epoch(data_iter, model, loss_compute):
     return total_loss / total_tokens
 
 
-global max_src_in_batch, max_tgt_in_batch
-def batch_size_fn(new, count, sofar):
-    "Keep augmenting batch and calculate total number of tokens + padding."
-    global max_src_in_batch, max_tgt_in_batch
-    if count == 1:
-        max_src_in_batch = 0
-        max_tgt_in_batch = 0
-    max_src_in_batch = max(max_src_in_batch,  len(new.src))
-    max_tgt_in_batch = max(max_tgt_in_batch,  len(new.trg) + 2)
-    src_elements = count * max_src_in_batch
-    tgt_elements = count * max_tgt_in_batch
-    return max(src_elements, tgt_elements)
+# global max_src_in_batch, max_tgt_in_batch
+# def batch_size_fn(new, count, sofar):
+#     "Keep augmenting batch and calculate total number of tokens + padding."
+#     global max_src_in_batch, max_tgt_in_batch
+#     if count == 1:
+#         max_src_in_batch = 0
+#         max_tgt_in_batch = 0
+#     max_src_in_batch = max(max_src_in_batch,  len(new.src))
+#     max_tgt_in_batch = max(max_tgt_in_batch,  len(new.trg) + 2)
+#     src_elements = count * max_src_in_batch
+#     tgt_elements = count * max_tgt_in_batch
+#     return max(src_elements, tgt_elements)
 
 
 class NoamOpt:
@@ -340,7 +336,9 @@ class NoamOpt:
         "Update parameters and rate"
         self._step += 1
         rate = self.rate()
+        print(type(self.optimizer.param_groups), len(self.optimizer.param_groups))
         for p in self.optimizer.param_groups:
+            print(p.keys())
             # print(p)
             p['lr'] = rate
         self._rate = rate
@@ -350,9 +348,7 @@ class NoamOpt:
         "Implement `lrate` above"
         if step is None:
             step = self._step
-        return self.factor * \
-               (self.model_size ** (-0.5) *
-                min(step ** (-0.5), step * self.warmup ** (-1.5)))
+        return self.factor * (self.model_size ** (-0.5) * min(step ** (-0.5), step * self.warmup ** (-1.5)))
 
 
 def get_std_opt(model):
@@ -360,12 +356,15 @@ def get_std_opt(model):
                    torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
 
 
+# maybe a bit nicer
+# https://github.com/OpenNMT/OpenNMT-py/blame/e8622eb5c6117269bb3accd8eb6f66282b5e67d9/onmt/utils/loss.py#L186
 class LabelSmoothing(nn.Module):
     "Implement label smoothing."
 
     def __init__(self, size, padding_idx, smoothing=0.0):
         super(LabelSmoothing, self).__init__()
-        self.criterion = nn.KLDivLoss(size_average=False)
+        # todo: mean here and delete "norm" part later in simple loss
+        self.criterion = nn.KLDivLoss(reduction='batchmean')
         self.padding_idx = padding_idx
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
@@ -405,8 +404,7 @@ class SimpleLossCompute:
 
     def __call__(self, x, y, norm):
         x = self.generator(x)
-        loss = self.criterion(x.contiguous().view(-1, x.size(-1)),
-                              y.contiguous().view(-1)) / norm
+        loss = self.criterion(x.reshape(-1, x.size(-1)), y.flatten()) / norm
         loss.backward()
         if self.opt is not None:
             self.opt.step()
@@ -414,22 +412,21 @@ class SimpleLossCompute:
         return loss.item() * norm
 
 
-# # Train the simple copy task.
-# V = 11
-# criterion = LabelSmoothing(size=V, padding_idx=0, smoothing=0.0)
-# model = make_model(V, V, N=2)
-# model_opt = NoamOpt(model.src_embed[0].d_model, 1, 400,
-#         torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-#
-# for epoch in range(10):
-#     model.train()
-#     run_epoch(data_gen(V, 30, 20), model,
-#               SimpleLossCompute(model.generator, criterion, model_opt))
-#     model.eval()
-#     print(run_epoch(data_gen(V, 30, 5), model,
-#                     SimpleLossCompute(model.generator, criterion, None)))
-#
-#
+# Train the simple copy task.
+V = 11
+criterion = LabelSmoothing(size=V, padding_idx=0, smoothing=0.0)
+model = make_model(V, V, N=2)
+model_opt = NoamOpt(model.src_embed[0].d_model, 1, 400,
+        torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
+
+for epoch in range(10):
+    model.train()
+    run_epoch(data_gen(V, 30, 20), model,
+              SimpleLossCompute(model.generator, criterion, model_opt))
+    model.eval()
+    print(run_epoch(data_gen(V, 30, 5), model,
+                    SimpleLossCompute(model.generator, criterion, None)))
+
 
 def greedy_decode(model, src, src_mask, max_len, start_symbol):
     memory = model.encode(src, src_mask)
@@ -437,17 +434,21 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
     for i in range(max_len-1):
         out = model.decode(memory, src_mask, Variable(ys),
                            Variable(subsequent_mask(ys.size(1)).type_as(src.data)))
+
+        tmp = out[:, -1]
+        print(tmp.shape)
+
         prob = model.generator(out[:, -1])
         _, next_word = torch.max(prob, dim=1)
         next_word = next_word.data[0]
         ys = torch.cat([ys, torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
     return ys
-#
-#
-# model.eval()
-# src = Variable(torch.LongTensor([[1,2,3,4,5,6,7,8,9,10]]))
-# src_mask = Variable(torch.ones(1, 1, 10) )
-# print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
+
+
+model.eval()
+src = Variable(torch.LongTensor([[1,2,3,4,5,6,7,8,9,10]]))
+src_mask = Variable(torch.ones(1, 1, 10) )
+print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
 
 
 # # For data loading.

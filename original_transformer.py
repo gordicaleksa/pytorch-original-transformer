@@ -29,7 +29,9 @@
     Paper link: https://arxiv.org/pdf/1706.03762.pdf
 
 """
+
 import math
+import copy
 
 
 import torch
@@ -64,6 +66,80 @@ class Transformer(nn.Module):
         return tgt_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities
 
 
+def get_clones(module, num_of_deep_copies):
+    # Create deep copies so that we can tweak each module's weights independently
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(num_of_deep_copies)])
+
+
+# Note: the original paper had LayerNorm AFTER the residual connection and addition operation
+# multiple experiments I found showed that it's more effective to do it before
+def sublayer_wrapper(representations_batch, sublayer_function):
+    return representations_batch + sublayer_function(sublayer_function)
+#
+# Encoder architecture
+#
+
+
+class Encoder(nn.Module):
+
+    def __init__(self, encoder_layer, number_of_layers):
+        super().__init__()
+        assert isinstance(encoder_layer, EncoderLayer), f'Expected EncoderLayer got {type(encoder_layer)}.'
+
+        self.encoder_layers = get_clones(encoder_layer, number_of_layers)
+        self.norm = nn.LayerNorm(encoder_layer.model_dimension)
+
+    def forward(self, src_embeddings_batch, src_mask):
+        # Just update the naming so as to reflect the semantics of what this var will become
+        src_representations_batch = src_embeddings_batch
+
+        for encoder_layer in self.encoder_layers:
+            # src_mask's role is to mask (ignore) the padded tokens in the multi-headed self-attention module
+            src_representations_batch = encoder_layer(src_representations_batch, src_mask)
+
+        return self.norm(src_representations_batch)
+
+
+class EncoderLayer(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, src_embeddings_batch, src_mask):
+
+
+#
+# Decoder architecture
+#
+
+
+class Decoder(nn.Module):
+
+    def __init__(self, decoder_layer, number_of_layers):
+        super().__init__()
+        assert isinstance(decoder_layer, DecoderLayer), f'Expected DecoderLayer got {type(decoder_layer)}.'
+
+        self.decoder_layers = get_clones(decoder_layer, number_of_layers)
+        self.norm = nn.LayerNorm(decoder_layer.model_dimension)
+
+    def forward(self, tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask):
+        # Just update the naming so as to reflect the semantics of what this var will become
+        tgt_representations_batch = tgt_embeddings_batch
+
+        for decoder_layer in self.decoder_layers:
+            tgt_representations_batch = decoder_layer(tgt_representations_batch, src_representations_batch, tgt_mask, src_mask)
+
+        return self.norm(tgt_representations_batch)
+
+
+class DecoderLayer(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self):
+
+
 class Embedding(nn.Module):
 
     def __init__(self, vocab_size, model_dimension):
@@ -83,18 +159,20 @@ class Embedding(nn.Module):
 class PositionalEncoding(nn.Module):
 
     # todo: register_buffer try coding models.params() once I have the full model and check whether these could become trainable
-    def __init__(self, model_dimension, dropout, expected_max_length=5000):
+    def __init__(self, model_dimension, dropout, expected_max_sequence_length=5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        # (paper) Use sine functions whose frequencies form a geometric progression as encodings
-        # (learning encodings will also work). Page 6, Chapter 3.5 "Positional Encoding"
-        position_id = torch.arange(0, expected_max_length).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, model_dimension, 2) * -(math.log(10000.0) / model_dimension))
+        # (stated in the paper) Use sine functions whose frequencies form a geometric progression as position encodings,
+        # (learning encodings will also work!). Page 6, Chapter 3.5 "Positional Encoding"
+        position_id = torch.arange(0, expected_max_sequence_length).unsqueeze(1)
+        frequencies = torch.pow(10000., -torch.arange(0, model_dimension, 2, dtype=torch.float) / model_dimension)
 
-        self.positional_encodings_table = torch.zeros(expected_max_length, model_dimension)
-        self.positional_encodings_table[:, 0::2] = torch.sin(position_id * div_term)
-        self.positional_encodings_table[:, 1::2] = torch.cos(position_id * div_term)
+        # Checkout playground.py for visualization of how these look like (it's super simple don't get scared)
+        positional_encodings_table = torch.zeros(expected_max_sequence_length, model_dimension)
+        positional_encodings_table[:, 0::2] = torch.sin(position_id * frequencies)  # sine on even positions
+        positional_encodings_table[:, 1::2] = torch.cos(position_id * frequencies)  # cosine on odd positions
+        self.positional_encodings_table = positional_encodings_table
 
     def forward(self, embeddings_batch):
         assert embeddings_batch.ndim == 3 and embeddings_batch.shape[-1] == self.positional_encodings_table.shape[1], \
@@ -109,7 +187,7 @@ if __name__ == "__main__":
     brt = torch.randint(1, 10, size=(3, 2))
     model_dim = 4
     em = Embedding(15, model_dim)
-    pe = PositionalEncoding(model_dim)
+    pe = PositionalEncoding(model_dim, 0.1)
     a = em(brt)
     b = pe(a)
     print(a)

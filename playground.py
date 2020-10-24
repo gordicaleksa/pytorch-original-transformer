@@ -1,28 +1,31 @@
-import math
+import matplotlib.pyplot as plt
+import numpy as np
 
 
-import torch
-from torch import nn
+from original_transformer import PositionalEncoding
 
 
-class PositionalEncoding(nn.Module):
+def visualize_positional_encodings():
+    # Create a PositionalEncoding object instance
+    pe = PositionalEncoding(model_dimension=512, dropout=0.1)
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
+    # Extract the positional encodings table
+    positional_encodings_table = pe.positional_encodings_table.numpy()
 
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
+    # Repeat columns width_mult times for better visualization
+    shape = positional_encodings_table.shape
+    data_type = positional_encodings_table.dtype
+    width_mult = 9  # make it almost square
+    positional_encodings_img = np.zeros((shape[0], width_mult*shape[1]), dtype=data_type)
+    for i in range(width_mult):
+        positional_encodings_img[:, i::width_mult] = positional_encodings_table
 
-    def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
-        return self.dropout(x)
+    # Display the positional encodings table
+    # Every row in this table gets added to a particular token position
+    # Row 0 always gets added to 0th token embedding, row 1 gets added to 1st token embedding, etc.
+    plt.title('Positional encodings')
+    plt.imshow(positional_encodings_img); plt.show()
 
 
 if __name__ == "__main__":
-    print('Place explanations of potentially confusing stuff in this file')
+    visualize_positional_encodings()

@@ -182,6 +182,7 @@ class DecoderGenerator(nn.Module):
         self.linear = nn.Linear(model_dimension, vocab_size)
 
         # -1 stands for apply the log-softmax along the last dimension (final token representation dimension)
+        # again using log softmax as PyTorch's nn.KLDivLoss expects log probabilities (just a technical detail)
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
     def forward(self, tgt_representations_batch):
@@ -226,12 +227,92 @@ class PositionwiseFeedForwardNet(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
+    """
+        This module already exists in PyTorch. The reason I implemented it here from scratch is that
+        PyTorch implementation is super complicated as they made it as generic as possible whereas on the other hand
+        I only want to support a limited use-case.
 
-    def __init__(self):
+        Also this is arguable the most important architectural component in the Transformer model.
+
+        Additional note:
+        This is conceptually super easy stuff. It's just that matrix implementation makes things a bit less intuitive.
+        If you take your time and go through the code and figure out all of the dimensions + write stuff down on paper
+        you'll understand everything. Also do check out this amazing blog for conceptual understanding:
+
+        https://jalammar.github.io/illustrated-transformer/
+
+        Optimization notes:
+        qkv_nets could be replaced by Parameter(torch.empty(3 * model_dimension, model_dimension)) and one more matrix
+        for bias, which would make the implementation a bit more optimized. For the sake of easier understanding though,
+        I'm doing it like this - using 3 feed forward nets. Conceptually both implementations are the same.
+
+        PyTorch's query/key/value are of different shape namely (max token sequence length, batch size, model dimension)
+        whereas I'm using (batch size, max token sequence length, model dimension) because it's easier to understand
+        and consistent with computer vision apps (batch dimension is always first followed by the number of channels (C)
+        and image's spatial dimensions height (H) and width (W) -> (B, C, H, W).
+
+        This has an important optimization implication, they can reshape their matrix into (B*NH, S, HD)
+        (where B - batch size, S - max sequence length, NH - number of heads, HD - head dimension) in a single step
+        and I can only get to (B, NH, S, HD) in single step (I could call contiguous() followed by view but that's
+        expensive as it would incur additional matrix copy)
+
+    """
+
+    def __init__(self, model_dimension, number_of_heads, dropout_probability):
         super().__init__()
+        assert model_dimension % number_of_heads == 0, f'Model dimension must be divisible by the number of heads.'
 
-    def forward(self):
-        print('dummy')
+        self.head_dimension = int(model_dimension / number_of_heads)
+        self.number_of_heads = number_of_heads
+
+        self.qkv_nets = get_clones(nn.Linear(model_dimension, model_dimension), 3)
+        self.out_projection_net = nn.Linear(model_dimension, model_dimension)
+
+        self.attention_dropout = nn.Dropout(p=dropout_probability)  # no pun intended.
+        self.softmax = nn.Softmax(dim=-1)  # -1 stands for apply the softmax along the last dimension
+
+        self.attention_weights = None  # for visualization purposes
+
+    def attention(self, query, key, value, mask):
+        # Step 1: Scaled dot-product attention, Page 4, Chapter 3.2.1 "Scaled Dot-Product Attention"
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(self.head_dimension)
+
+        # Step 2: Optionally mask words whose representations we want to ignore by setting a big negative number
+        # to locations corresponding to those words (make softmax output 0 probability on those locations).
+        if mask is not None:
+            # todo: check whether my mask will be boolean
+            scores.masked_fill(mask == 0., float("Inf"))
+
+        # Step 3: Calculate the attention weights - how much should we attend to surrounding token representations
+        attention_weights = self.softmax(scores)
+
+        # Step 4: Not defined in the original paper apply dropout to attention weights as well
+        attention_weights = self.attention_dropout(attention_weights)
+
+        # Step 5: based on attention weights calculate new token representations
+        intermediate_token_representations = torch.matmul(attention_weights, value)
+
+        # todo: visualize attention
+        return intermediate_token_representations, attention_weights  # pass attention weights for visualization purposes
+
+    def forward(self, query, key, value, mask):
+        # Step 1: linearly project
+        # todo: verify q/k/v are contiguous, try directly reshaping into PyTorch's optimal shape
+        batch_size = query.shape[0]
+        query, key, value = [net(x).view(batch_size, -1, self.number_of_heads, self.head_dimension).transpose(1, 2)
+                             for net, x in zip(self.qkv_nets, (query, key, value))]
+
+        # Step 2: Apply attention
+        intermediate_token_representations, self.attention_weights = self.attention(query, key, value, mask)
+
+        # Step 3: reshape from (B, NH, S, HD) over (B, S, NH, HD) (via transpose) into (B, S, NHxHD)
+        # where B - batch size, S - max sequence length, NH - number of heads, HD - head dimension
+        reshaped = intermediate_token_representations.transpose(1, 2).view(batch_size, -1, self.number_of_heads * self.head_dimension)
+
+        # Step 4: Linear projection
+        token_representations = self.out_projection_net(reshaped)
+
+        return token_representations
 
 
 class Embedding(nn.Module):

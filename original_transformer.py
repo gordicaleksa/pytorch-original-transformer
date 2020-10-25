@@ -1,4 +1,3 @@
-# 24, October, 2020
 # todo: step1 - figure out how the first part works (toy example) (DONE)
 # todo: step2 - rewrite the whole thing it's not a good design
 # todo: step3 - add real example support (rewrite)
@@ -10,20 +9,6 @@
 # todo: use built-in blocks but implement them myself also
 # todo: a must: implement simple, dedicated multi-headed SELF-attention
 # todo: add a jupyter notebook
-
-# todo: do it like this better then annotated transformer imp
-# attn_output_weights = torch.bmm(q, k.transpose(1, 2))
-#     assert list(attn_output_weights.size()) == [bsz * num_heads, tgt_len, src_len]
-
-# todo: also view should have 3 dims like (batch_size * n_heads, num_tokens, head_dim)
-# and not separate
-# attn_output_weights.masked_fill_(attn_mask, float('-inf'))
-#
-# attn_output = torch.bmm(attn_output_weights, v)
-#     assert list(attn_output.size()) == [bsz * num_heads, tgt_len, head_dim]
-# attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
-#     attn_output = linear(attn_output, out_proj_weight, out_proj_bias)
-
 # todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 """
     Contains the implementation of the original transformer paper "Attention is all you need".
@@ -48,19 +33,25 @@ import torch.nn as nn
 
 class Transformer(nn.Module):
 
-    def __init__(self, src_embedding, tgt_embedding, src_pos_embedding, tgt_pos_embedding, encoder, decoder, decoder_generator):
+    def __init__(self, model_dimension, src_vocab_size, tgt_vocab_size, number_of_heads, number_of_layers, dropout_probability):
         super().__init__()
 
-        self.src_embedding = src_embedding
-        self.src_pos_embedding = src_pos_embedding
+        self.src_embedding = Embedding(src_vocab_size, model_dimension)
+        self.src_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
 
-        self.tgt_embedding = tgt_embedding
-        self.tgt_pos_embedding = tgt_pos_embedding
+        self.tgt_embedding = Embedding(tgt_vocab_size, model_dimension)
+        self.tgt_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
 
-        self.encoder = encoder
-        self.decoder = decoder
+        # All of these will get deep copied internally
+        mha = MultiHeadedAttention(model_dimension, number_of_heads, dropout_probability)
+        pwn = PositionwiseFeedForwardNet(model_dimension, dropout_probability)
+        encoder_layer = EncoderLayer(model_dimension, dropout_probability, mha, pwn)
+        decoder_layer = DecoderLayer(model_dimension, dropout_probability, mha, mha, pwn)
 
-        self.decoder_generator = decoder_generator
+        self.encoder = Encoder(encoder_layer, number_of_layers)
+        self.decoder = Decoder(decoder_layer, number_of_layers)
+
+        self.decoder_generator = DecoderGenerator(model_dimension, tgt_vocab_size)
 
     def forward(self, src_token_ids_batch, tgt_token_ids_batch, src_mask, tgt_mask):
         # todo: comment everything once I finished the initial design
@@ -84,7 +75,8 @@ class Encoder(nn.Module):
 
     def __init__(self, encoder_layer, number_of_layers):
         super().__init__()
-        assert isinstance(encoder_layer, EncoderLayer), f'Expected EncoderLayer got {type(encoder_layer)}.'
+        assert isinstance(encoder_layer,
+                          ), f'Expected EncoderLayer got {type(encoder_layer)}.'
 
         self.encoder_layers = get_clones(encoder_layer, number_of_layers)
         self.norm = nn.LayerNorm(encoder_layer.model_dimension)
@@ -94,7 +86,7 @@ class Encoder(nn.Module):
         src_representations_batch = src_embeddings_batch
 
         for encoder_layer in self.encoder_layers:
-            # src_mask's role is to mask (ignore) the padded token representations in the multi-headed self-attention module
+            # src_mask's role is to mask/ignore padded token representations in the multi-headed self-attention module
             src_representations_batch = encoder_layer(src_representations_batch, src_mask)
 
         return self.norm(src_representations_batch)
@@ -365,11 +357,8 @@ def get_clones(module, num_of_deep_copies):
 
 if __name__ == "__main__":
     brt = torch.randint(1, 10, size=(3, 2))
-    model_dim = 4
-    em = Embedding(15, model_dim)
-    pe = PositionalEncoding(model_dim, 0.1)
-    a = em(brt)
-    b = pe(a)
-    print(a)
 
+    t = Transformer(512, 11, 11, 8, 6, 0.1)
+
+    out = t(brt, brt, None, None)
 

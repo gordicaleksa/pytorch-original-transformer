@@ -1,15 +1,3 @@
-# todo: step1 - figure out how the first part works (toy example) (DONE)
-# todo: step2 - rewrite the whole thing it's not a good design
-# todo: step3 - add real example support (rewrite)
-# todo: step4 - add beam search and other missing components
-# todo: step5 - train the model and report BLEU
-# todo: step6 - write README and open-source
-
-# todo: take a look at the naming used in the original paper
-# todo: use built-in blocks but implement them myself also
-# todo: a must: implement simple, dedicated multi-headed SELF-attention
-# todo: add a jupyter notebook
-# todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 """
     Contains the implementation of the original transformer paper "Attention is all you need".
 
@@ -22,6 +10,7 @@
     Prerequisite theory: https://jalammar.github.io/illustrated-transformer/ (amazing blog!)
 
 """
+
 
 import math
 import copy
@@ -42,7 +31,7 @@ class Transformer(nn.Module):
         self.tgt_embedding = Embedding(tgt_vocab_size, model_dimension)
         self.tgt_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
 
-        # All of these will get deep copied internally
+        # All of these will get deep-copied internally
         mha = MultiHeadedAttention(model_dimension, number_of_heads, dropout_probability)
         pwn = PositionwiseFeedForwardNet(model_dimension, dropout_probability)
         encoder_layer = EncoderLayer(model_dimension, dropout_probability, mha, pwn)
@@ -52,6 +41,11 @@ class Transformer(nn.Module):
         self.decoder = Decoder(decoder_layer, number_of_layers)
 
         self.decoder_generator = DecoderGenerator(model_dimension, tgt_vocab_size)
+        self.init_params()
+
+    def init_params(self):
+        # todo: potentially add special initialization (not mentioned in the paper though)
+        print('dummy')
 
     def forward(self, src_token_ids_batch, tgt_token_ids_batch, src_mask, tgt_mask):
         # todo: comment everything once I finished the initial design
@@ -75,8 +69,7 @@ class Encoder(nn.Module):
 
     def __init__(self, encoder_layer, number_of_layers):
         super().__init__()
-        assert isinstance(encoder_layer,
-                          ), f'Expected EncoderLayer got {type(encoder_layer)}.'
+        assert isinstance(encoder_layer, EncoderLayer), f'Expected EncoderLayer got {type(encoder_layer)}.'
 
         self.encoder_layers = get_clones(encoder_layer, number_of_layers)
         self.norm = nn.LayerNorm(encoder_layer.model_dimension)
@@ -89,6 +82,7 @@ class Encoder(nn.Module):
             # src_mask's role is to mask/ignore padded token representations in the multi-headed self-attention module
             src_representations_batch = encoder_layer(src_representations_batch, src_mask)
 
+        # not mentioned explicitly in the paper
         return self.norm(src_representations_batch)
 
 
@@ -101,6 +95,8 @@ class EncoderLayer(nn.Module):
 
         self.multi_headed_attention = multi_headed_attention
         self.pointwise_net = pointwise_net
+
+        self.model_dimension = model_dimension
 
     def forward(self, src_representations_batch, src_mask):
         # Define anonymous (lambda) function which only takes src_representations_batch (srb) as input,
@@ -134,6 +130,7 @@ class Decoder(nn.Module):
         for decoder_layer in self.decoder_layers:
             tgt_representations_batch = decoder_layer(tgt_representations_batch, src_representations_batch, tgt_mask, src_mask)
 
+        # not mentioned explicitly in the paper
         return self.norm(tgt_representations_batch)
 
 
@@ -147,6 +144,8 @@ class DecoderLayer(nn.Module):
         self.tgt_multi_headed_attention = tgt_multi_headed_attention
         self.src_multi_headed_attention = src_multi_headed_attention
         self.pointwise_net = pointwise_net
+
+        self.model_dimension = model_dimension
 
     def forward(self, tgt_representations_batch, src_representations_batch, tgt_mask, src_mask):
         # Define anonymous (lambda) function which only takes tgt_representations_batch (trb - funny name I know)
@@ -358,7 +357,7 @@ def get_clones(module, num_of_deep_copies):
 if __name__ == "__main__":
     brt = torch.randint(1, 10, size=(3, 2))
 
+    # todo: what are all of the trainable params, register buffer if needed
     t = Transformer(512, 11, 11, 8, 6, 0.1)
 
     out = t(brt, brt, None, None)
-

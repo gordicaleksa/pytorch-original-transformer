@@ -24,7 +24,7 @@
 # attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
 #     attn_output = linear(attn_output, out_proj_weight, out_proj_bias)
 
-# todo: create this in a similar fashion to GANs repo
+# todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 """
     Contains the implementation of the original transformer paper "Attention is all you need".
 
@@ -63,11 +63,12 @@ class Transformer(nn.Module):
         self.decoder_generator = decoder_generator
 
     def forward(self, src_token_ids_batch, tgt_token_ids_batch, src_mask, tgt_mask):
+        # todo: comment everything once I finished the initial design
         src_embeddings_batch = self.src_pos_embedding(self.src_embedding(src_token_ids_batch))
         src_representations_batch = self.encoder(src_embeddings_batch, src_mask)
 
         tgt_embeddings_batch = self.tgt_pos_embedding(self.tgt_embedding(tgt_token_ids_batch))
-        tgt_representations_batch = self.decoder(tgt_embeddings_batch, src_representations_batch, tgt_mask)
+        tgt_representations_batch = self.decoder(tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask)
 
         tgt_log_probs = self.decoder_generator(tgt_representations_batch)
 
@@ -93,7 +94,7 @@ class Encoder(nn.Module):
         src_representations_batch = src_embeddings_batch
 
         for encoder_layer in self.encoder_layers:
-            # src_mask's role is to mask (ignore) the padded tokens in the multi-headed self-attention module
+            # src_mask's role is to mask (ignore) the padded token representations in the multi-headed self-attention module
             src_representations_batch = encoder_layer(src_representations_batch, src_mask)
 
         return self.norm(src_representations_batch)
@@ -101,12 +102,23 @@ class Encoder(nn.Module):
 
 class EncoderLayer(nn.Module):
 
-    def __init__(self):
+    def __init__(self, model_dimension, dropout_probability, multi_headed_attention, pointwise_net):
         super().__init__()
-        self.multiheaded_attention_sublayer =
-        self.pointwise_net_sublayer = Sublayer
+        num_of_sublayers_encoder = 2
+        self.sublayers = get_clones(SublayerLogic(model_dimension, dropout_probability), num_of_sublayers_encoder)
 
-    def forward(self, src_embeddings_batch, src_mask):
+        self.multi_headed_attention = multi_headed_attention
+        self.pointwise_net = pointwise_net
+
+    def forward(self, src_representations_batch, src_mask):
+        # Define anonymous (lambda) function which only takes src_representations_batch (srb) as input,
+        # this way we have a uniform interface for the sublayer logic.
+        encoder_self_attention = lambda srb: self.multi_headed_attention(query=srb, key=srb, value=srb, mask=src_mask)
+
+        src_representations_batch = self.sublayers[0](src_representations_batch, encoder_self_attention)
+        src_representations_batch = self.sublayers[1](src_representations_batch, self.pointwise_net)
+
+        return src_representations_batch
 
 
 #
@@ -135,42 +147,82 @@ class Decoder(nn.Module):
 
 class DecoderLayer(nn.Module):
 
-    def __init__(self):
+    def __init__(self, model_dimension, dropout_probability, src_multi_headed_attention, tgt_multi_headed_attention, pointwise_net):
+        super().__init__()
+        num_of_sublayers_decoder = 3
+        self.sublayers = get_clones(SublayerLogic(model_dimension, dropout_probability), num_of_sublayers_decoder)
+
+        self.tgt_multi_headed_attention = tgt_multi_headed_attention
+        self.src_multi_headed_attention = src_multi_headed_attention
+        self.pointwise_net = pointwise_net
+
+    def forward(self, tgt_representations_batch, src_representations_batch, tgt_mask, src_mask):
+        # Define anonymous (lambda) function which only takes tgt_representations_batch (trb - funny name I know)
+        # as input - this way we have a uniform interface for the sublayer logic.
+        srb = src_representations_batch
+        decoder_tgt_self_attention = lambda trb: self.multi_headed_attention(query=trb, key=trb, value=trb, mask=tgt_mask)
+        decoder_src_self_attention = lambda trb: self.multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
+
+        tgt_representations_batch = self.sublayers[0](tgt_representations_batch, decoder_tgt_self_attention)
+        tgt_representations_batch = self.sublayers[1](tgt_representations_batch, decoder_src_self_attention)
+        tgt_representations_batch = self.sublayers[2](tgt_representations_batch, self.pointwise_net)
+
+        return tgt_representations_batch
+
+
+#
+# Helper modules (designed with modularity in mind) and organized top to bottom.
+#
+
+
+class DecoderGenerator(nn.Module):
+    def __init__(self, model_dimension, vocab_size):
         super().__init__()
 
-    def forward(self):
+        self.linear = nn.Linear(model_dimension, vocab_size)
 
+        # -1 stands for apply the log-softmax along the last dimension (final token representation dimension)
+        self.log_softmax = nn.LogSoftmax(dim=-1)
 
-#
-# Helper modules (designed with modularity in mind)
-#
-
-
-def get_clones(module, num_of_deep_copies):
-    # Create deep copies so that we can tweak each module's weights independently
-    return nn.ModuleList([copy.deepcopy(module) for _ in range(num_of_deep_copies)])
+    def forward(self, tgt_representations_batch):
+        return self.log_softmax(self.linear(tgt_representations_batch))
 
 
 # Note: the original paper had LayerNorm AFTER the residual connection and addition operation
-# multiple experiments I found showed that it's more effective to do it before
-class Sublayer(nn.Module):
-    def __init__(self, sublayer_module, dropout_probability):
+# multiple experiments I found showed that it's more effective to do it BEFORE
+class SublayerLogic(nn.Module):
+    def __init__(self, model_dimension, dropout_probability):
         super().__init__()
-        self.sublayer_module = sublayer_module
-        self.norm = nn.LayerNorm(sublayer_module.model_dimension)
+        self.norm = nn.LayerNorm(model_dimension)
         self.dropout = nn.Dropout(p=dropout_probability)
 
-    def forward(self, x, var_args):
-        return x + self.dropout(self.sublayer_module(self.norm(x)))
+    def forward(self, representations_batch, sublayer_module):
+        # Page 7, Chapter 5.4 "Regularization"
+        return representations_batch + self.dropout(sublayer_module(self.norm(representations_batch)))
 
 
-class PositionwiseFeedForward(nn.Module):
+class PositionwiseFeedForwardNet(nn.Module):
+    """
+        It's position-wise because this feed forward net will be independently applied to every token's representation.
 
-    def __init__(self):
+        Representations batch is of the shape (batch size, max token sequence length, model dimension).
+        This net will basically be applied independently to every token's representation (you can think of it as if
+        there was a nested for-loop going over the batch size and max token sequence length dimensions
+        and applied this net to token representations. PyTorch does this automagically behind the scenes.
+
+    """
+    def __init__(self, model_dimension, dropout_probability, width_mult=4):
         super().__init__()
 
-    def forward(self):
-        print('dummy')
+        self.linear1 = nn.Linear(model_dimension, width_mult * model_dimension)
+        self.linear2 = nn.Linear(width_mult * model_dimension, model_dimension)
+
+        # This dropout layer is not explicitly mentioned in the paper but it's common to use to avoid over-fitting
+        self.dropout = nn.Dropout(p=dropout_probability)
+        self.relu = nn.ReLU()
+
+    def forward(self, representations_batch):
+        return self.linear2(self.dropout(self.relu(self.linear1(representations_batch))))
 
 
 class MultiHeadedAttention(nn.Module):
@@ -223,6 +275,11 @@ class PositionalEncoding(nn.Module):
         # (stated in the paper) Applying dropout to the sum of positional encodings and token embeddings
         # Page 7, Chapter 5.4 "Regularization"
         return self.dropout(embeddings_batch + self.positional_encodings_table[:embeddings_batch.shape[1]])
+
+
+def get_clones(module, num_of_deep_copies):
+    # Create deep copies so that we can tweak each module's weights independently
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(num_of_deep_copies)])
 
 
 if __name__ == "__main__":

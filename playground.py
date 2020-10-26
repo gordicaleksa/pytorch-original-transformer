@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-from original_transformer import PositionalEncoding
+from transformer_model import PositionalEncoding
 
 
 def visualize_positional_encodings():

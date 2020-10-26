@@ -1,13 +1,13 @@
 """
     Contains the implementation of the original transformer paper "Attention is all you need".
 
-    Certain modifications:
-    1. LayerNorm
-    2. Dropout
-
     Paper link: https://arxiv.org/pdf/1706.03762.pdf
 
-    Prerequisite theory: https://jalammar.github.io/illustrated-transformer/ (amazing blog!)
+    Certain modifications:
+    1. LayerNorm (before instead of after)
+    2. Dropout (Added additionally to attention weights and point-wise feed-forward net sublayer
+
+    Suggested theory: https://jalammar.github.io/illustrated-transformer/ (amazing blog!)
 
 """
 
@@ -18,6 +18,9 @@ import copy
 
 import torch
 import torch.nn as nn
+
+
+from constants import *
 
 
 class Transformer(nn.Module):
@@ -151,8 +154,8 @@ class DecoderLayer(nn.Module):
         # Define anonymous (lambda) function which only takes tgt_representations_batch (trb - funny name I know)
         # as input - this way we have a uniform interface for the sublayer logic.
         srb = src_representations_batch
-        decoder_tgt_self_attention = lambda trb: self.multi_headed_attention(query=trb, key=trb, value=trb, mask=tgt_mask)
-        decoder_src_self_attention = lambda trb: self.multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
+        decoder_tgt_self_attention = lambda trb: self.tgt_multi_headed_attention(query=trb, key=trb, value=trb, mask=tgt_mask)
+        decoder_src_self_attention = lambda trb: self.src_multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
 
         tgt_representations_batch = self.sublayers[0](tgt_representations_batch, decoder_tgt_self_attention)
         tgt_representations_batch = self.sublayers[1](tgt_representations_batch, decoder_src_self_attention)
@@ -272,7 +275,7 @@ class MultiHeadedAttention(nn.Module):
         # to locations corresponding to those words (make softmax output 0 probability on those locations).
         if mask is not None:
             # todo: check whether my mask will be boolean
-            scores.masked_fill(mask == 0., float("Inf"))
+            scores.masked_fill(mask == 0., -float("Inf"))
 
         # Step 3: Calculate the attention weights - how much should we attend to surrounding token representations
         attention_weights = self.softmax(scores)
@@ -298,12 +301,17 @@ class MultiHeadedAttention(nn.Module):
 
         # Step 3: reshape from (B, NH, S, HD) over (B, S, NH, HD) (via transpose) into (B, S, NHxHD)
         # where B - batch size, S - max sequence length, NH - number of heads, HD - head dimension
-        reshaped = intermediate_token_representations.transpose(1, 2).view(batch_size, -1, self.number_of_heads * self.head_dimension)
+        reshaped = intermediate_token_representations.transpose(1, 2).contiguous().view(batch_size, -1, self.number_of_heads * self.head_dimension)
 
         # Step 4: Linear projection
         token_representations = self.out_projection_net(reshaped)
 
         return token_representations
+
+
+#
+# Input modules
+#
 
 
 class Embedding(nn.Module):
@@ -324,7 +332,6 @@ class Embedding(nn.Module):
 
 class PositionalEncoding(nn.Module):
 
-    # todo: register_buffer try coding models.params() once I have the full model and check whether these could become trainable
     def __init__(self, model_dimension, dropout_probability, expected_max_sequence_length=5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout_probability)
@@ -338,7 +345,7 @@ class PositionalEncoding(nn.Module):
         positional_encodings_table = torch.zeros(expected_max_sequence_length, model_dimension)
         positional_encodings_table[:, 0::2] = torch.sin(position_id * frequencies)  # sine on even positions
         positional_encodings_table[:, 1::2] = torch.cos(position_id * frequencies)  # cosine on odd positions
-        self.positional_encodings_table = positional_encodings_table
+        self.register_buffer('positional_encodings_table', positional_encodings_table)
 
     def forward(self, embeddings_batch):
         assert embeddings_batch.ndim == 3 and embeddings_batch.shape[-1] == self.positional_encodings_table.shape[1], \
@@ -349,15 +356,50 @@ class PositionalEncoding(nn.Module):
         return self.dropout(embeddings_batch + self.positional_encodings_table[:embeddings_batch.shape[1]])
 
 
+#
+# Helper model functions
+#
+
+
 def get_clones(module, num_of_deep_copies):
     # Create deep copies so that we can tweak each module's weights independently
     return nn.ModuleList([copy.deepcopy(module) for _ in range(num_of_deep_copies)])
 
 
+# Count how many trainable weights the model has <- just for having a feeling for how big the model is
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def debug_params_vs_buffer(model):
+    print(model.state_dict().keys())
+
+    for name, param in model.named_parameters():
+        print(name, param.shape, param.requires_grad)
+        if not param.requires_grad:
+            print('*' * 5, name, param.shape)
+
+
 if __name__ == "__main__":
-    brt = torch.randint(1, 10, size=(3, 2))
+    use_big_transformer = False
 
-    # todo: what are all of the trainable params, register buffer if needed
-    t = Transformer(512, 11, 11, 8, 6, 0.1)
+    # Dummy data
+    src_vocab_size = 11
+    tgt_vocab_size = 11
+    src_token_ids_batch = torch.randint(1, 10, size=(3, 2))
+    tgt_token_ids_batch = torch.randint(1, 10, size=(3, 2))
 
-    out = t(brt, brt, None, None)
+    transformer = Transformer(
+        model_dimension=BIG_MODEL_DIMENSION if use_big_transformer else BASELINE_MODEL_DIMENSION,
+        src_vocab_size=src_vocab_size,
+        tgt_vocab_size=tgt_vocab_size,
+        number_of_heads=BIG_MODEL_NUMBER_OF_HEADS if use_big_transformer else BASELINE_MODEL_NUMBER_OF_HEADS,
+        number_of_layers=BIG_MODEL_NUMBER_OF_LAYERS if use_big_transformer else BASELINE_MODEL_NUMBER_OF_LAYERS,
+        dropout_probability=BIG_MODEL_DROPOUT_PROB if use_big_transformer else BASELINE_MODEL_DROPOUT_PROB
+    )
+
+    debug_params_vs_buffer(transformer)
+
+    print(f'Size of the {"big" if use_big_transformer else "baseline"} transformer = {count_parameters(transformer)}')
+
+    out = transformer(src_token_ids_batch, tgt_token_ids_batch, src_mask=None, tgt_mask=None)

@@ -23,6 +23,7 @@ import torch.nn as nn
 from constants import *
 
 
+# todo: after I get the training up and running verify that this design is the best one
 class Transformer(nn.Module):
 
     def __init__(self, model_dimension, src_vocab_size, tgt_vocab_size, number_of_heads, number_of_layers, dropout_probability):
@@ -38,7 +39,7 @@ class Transformer(nn.Module):
         mha = MultiHeadedAttention(model_dimension, number_of_heads, dropout_probability)
         pwn = PositionwiseFeedForwardNet(model_dimension, dropout_probability)
         encoder_layer = EncoderLayer(model_dimension, dropout_probability, mha, pwn)
-        decoder_layer = DecoderLayer(model_dimension, dropout_probability, mha, mha, pwn)
+        decoder_layer = DecoderLayer(model_dimension, dropout_probability, mha, pwn)
 
         self.encoder = Encoder(encoder_layer, number_of_layers)
         self.decoder = Decoder(decoder_layer, number_of_layers)
@@ -139,13 +140,13 @@ class Decoder(nn.Module):
 
 class DecoderLayer(nn.Module):
 
-    def __init__(self, model_dimension, dropout_probability, src_multi_headed_attention, tgt_multi_headed_attention, pointwise_net):
+    def __init__(self, model_dimension, dropout_probability, multi_headed_attention, pointwise_net):
         super().__init__()
         num_of_sublayers_decoder = 3
         self.sublayers = get_clones(SublayerLogic(model_dimension, dropout_probability), num_of_sublayers_decoder)
 
-        self.tgt_multi_headed_attention = tgt_multi_headed_attention
-        self.src_multi_headed_attention = src_multi_headed_attention
+        self.tgt_multi_headed_attention = copy.deepcopy(multi_headed_attention)
+        self.src_multi_headed_attention = copy.deepcopy(multi_headed_attention)
         self.pointwise_net = pointwise_net
 
         self.model_dimension = model_dimension
@@ -371,17 +372,21 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def debug_params_vs_buffer(model):
+def analyze_state_dict_shapes_and_names(model):
+    # This part helped me figure out that I don't have positional encodings saved in the state dict
     print(model.state_dict().keys())
 
+    # This part helped me see that src MHA was missing in the decoder since both it and tgt MHA were referencing
+    # the same MHA object in memory - stupid mistake, happens all the time, embrace the suck!
     for name, param in model.named_parameters():
-        print(name, param.shape, param.requires_grad)
+        print(name, param.shape)
         if not param.requires_grad:
-            print('*' * 5, name, param.shape)
+            raise Exception('Expected all of the params to be trainable - no param freezing used.')
 
 
+# Testing the correctness of the transformer model - feel free to ignore - I used it during model development
 if __name__ == "__main__":
-    use_big_transformer = False
+    use_big_transformer = True
 
     # Dummy data
     src_vocab_size = 11
@@ -398,8 +403,12 @@ if __name__ == "__main__":
         dropout_probability=BIG_MODEL_DROPOUT_PROB if use_big_transformer else BASELINE_MODEL_DROPOUT_PROB
     )
 
-    debug_params_vs_buffer(transformer)
-
+    # These 2 functions helped me figure out the 2 bugs I had:
+    # 1) I did not register positional encodings and thus they wouldn't be saved and later model-loading would fail
+    # 2) I had a bug with MHA (attention) in decoder, where both src and tgt were referencing the same MHA object in mem
+    # It's a good practice to see whether the names, shapes and number of params make sense.
+    # e.g. I knew that the big transformer had ~175 M params and I verified that here.
+    analyze_state_dict_shapes_and_names(transformer)
     print(f'Size of the {"big" if use_big_transformer else "baseline"} transformer = {count_parameters(transformer)}')
 
     out = transformer(src_token_ids_batch, tgt_token_ids_batch, src_mask=None, tgt_mask=None)

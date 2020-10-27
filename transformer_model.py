@@ -270,13 +270,15 @@ class MultiHeadedAttention(nn.Module):
 
     def attention(self, query, key, value, mask):
         # Step 1: Scaled dot-product attention, Page 4, Chapter 3.2.1 "Scaled Dot-Product Attention"
+        # query/key/value shape = (B, NH, S, HD), scores shape = (B, NH, S, S)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(self.head_dimension)
 
         # Step 2: Optionally mask words whose representations we want to ignore by setting a big negative number
         # to locations corresponding to those words (make softmax output 0 probability on those locations).
+        # mask shape = (B, 1, 1, S) will get broad-casted (copied) as needed to match scores shape
         if mask is not None:
             # todo: check whether my mask will be boolean
-            scores.masked_fill(mask == 0., -float("Inf"))
+            scores.masked_fill(mask == torch.tensor(False), float("-inf"))
 
         # Step 3: Calculate the attention weights - how much should we attend to surrounding token representations
         attention_weights = self.softmax(scores)

@@ -3,6 +3,11 @@ import numpy as np
 
 
 from transformer_model import PositionalEncoding
+from optimizers_and_loss_fn import CustomLearningRateAdamOptimizer
+
+
+# def visualize_custom_lr_adam():
+    # c = CustomLearningRateAdamOptimizer()
 
 
 def visualize_positional_encodings():

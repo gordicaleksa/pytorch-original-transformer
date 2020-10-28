@@ -34,6 +34,9 @@ class CustomLRAdamOptimizer:
 
         return self.model_size ** (-0.5) * min(step ** (-0.5), step * warmup ** (-1.5))
 
+    def zero_grad(self):
+        self.optimizer.zero_grad()
+
 
 class LabelSmoothingDistribution(nn.Module):
     """

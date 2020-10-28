@@ -60,6 +60,7 @@ class Transformer(nn.Module):
         tgt_representations_batch = self.decoder(tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask)
 
         tgt_log_probs = self.decoder_generator(tgt_representations_batch)
+        tgt_log_probs = tgt_log_probs.view(-1, tgt_log_probs.shape[-1])
 
         return tgt_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities
 

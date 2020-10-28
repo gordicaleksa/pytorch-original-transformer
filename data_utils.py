@@ -86,12 +86,12 @@ def sample_text_from_loader(SRC, TGT, token_ids_loader, num_samples=2, sample_sr
 def build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, padding_token_id):
     batch_size = src_token_ids_batch.shape[0]
 
-    # src_padding_mask shape = (B, 1, 1, S) check out attention function in transformer_model.py where masks are applied
-    # src_padding_mask only masks pad tokens as we want to ignore their representations (no information there...)
-    src_padding_mask = (src_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
-    num_src_tokens = torch.sum(src_padding_mask.long())
+    # src_mask shape = (B, 1, 1, S) check out attention function in transformer_model.py where masks are applied
+    # src_mask only masks pad tokens as we want to ignore their representations (no information there...)
+    src_mask = (src_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
+    num_src_tokens = torch.sum(src_mask.long())
 
-    # Same as src_padding_mask but we additionally want to mask tokens from looking forward into the future tokens
+    # Same as src_mask but we additionally want to mask tokens from looking forward into the future tokens
     # Note: wherever the mask value is true we want to attend to that token, otherwise we mask (ignore) it.
     sequence_length = tgt_token_ids_batch.shape[1]
     tgt_padding_mask = (tgt_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
@@ -101,7 +101,7 @@ def build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, paddi
     tgt_mask = tgt_padding_mask & tgt_no_look_forward_mask
     num_tgt_tokens = torch.sum(tgt_padding_mask.long())
 
-    return src_padding_mask, tgt_mask, num_src_tokens, num_tgt_tokens
+    return src_mask, tgt_mask, num_src_tokens, num_tgt_tokens
 
 
 # For testing purposes feel free to ignore

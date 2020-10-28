@@ -278,7 +278,7 @@ class MultiHeadedAttention(nn.Module):
         # mask shape = (B, 1, 1, S) will get broad-casted (copied) as needed to match scores shape
         if mask is not None:
             # todo: check whether my mask will be boolean
-            scores.masked_fill(mask == torch.tensor(False), float("-inf"))
+            scores.masked_fill_(mask == torch.tensor(False), float("-inf"))
 
         # Step 3: Calculate the attention weights - how much should we attend to surrounding token representations
         attention_weights = self.softmax(scores)

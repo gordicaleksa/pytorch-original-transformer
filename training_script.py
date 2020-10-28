@@ -11,4 +11,6 @@
 # todo: add a jupyter notebook
 # todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 
+from torch import nn
 
+criterion = nn.KLDivLoss(reduction='batchmean')

@@ -42,7 +42,7 @@ def build_datasets_and_vocabs():
     return train_dataset, val_dataset, test_dataset, SRC, TGT
 
 
-def get_data_loaders(batch_size=256):
+def get_data_loaders(batch_size=64):
     train_dataset, val_dataset, test_dataset, SRC, TGT = build_datasets_and_vocabs()
 
     # todo: figure out how to set the optimal batch size
@@ -51,7 +51,7 @@ def get_data_loaders(batch_size=256):
      datasets=(train_dataset, val_dataset),
      batch_sizes=(batch_size, batch_size),
      device=0,
-     sort_key=lambda x: len(vars(x)['src']), # the BucketIterator needs to be told what function it should use to group the data.
+     # sort_key=lambda x: len(vars(x)['src']), # the BucketIterator needs to be told what function it should use to group the data.
     )
     test_token_ids_loader = Iterator(test_dataset, batch_size=64, device=0, sort=False, sort_within_batch=False, repeat=False)
 

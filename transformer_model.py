@@ -60,11 +60,9 @@ class Transformer(nn.Module):
         tgt_representations_batch = self.decoder(tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask)
 
         tgt_log_probs = self.decoder_generator(tgt_representations_batch)
-        print(tgt_log_probs.is_contiguous())
         # todo: add a clarification of what I've done here
-        tgt_log_probs = tgt_log_probs[:, -1]
-        print(tgt_log_probs.is_contiguous())
-        tgt_log_probs = tgt_log_probs.view(-1, tgt_log_probs.shape[-1])
+        tgt_log_probs = tgt_log_probs[:, :-1]
+        tgt_log_probs = tgt_log_probs.reshape(-1, tgt_log_probs.shape[-1])
 
         return tgt_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities
 
@@ -309,7 +307,7 @@ class MultiHeadedAttention(nn.Module):
 
         # Step 3: reshape from (B, NH, S, HD) over (B, S, NH, HD) (via transpose) into (B, S, NHxHD)
         # where B - batch size, S - max sequence length, NH - number of heads, HD - head dimension
-        reshaped = intermediate_token_representations.transpose(1, 2).contiguous().view(batch_size, -1, self.number_of_heads * self.head_dimension)
+        reshaped = intermediate_token_representations.transpose(1, 2).reshape(batch_size, -1, self.number_of_heads * self.head_dimension)
 
         # Step 4: Linear projection
         token_representations = self.out_projection_net(reshaped)

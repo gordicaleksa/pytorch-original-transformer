@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     loss_fn = nn.KLDivLoss(reduction='batchmean')
 
-    smoother = LabelSmoothingDistribution(BASELINE_MODEL_LABEL_SMOOTHING_VALUE, padding_token_id, tgt_vocab_size)
+    smoother = LabelSmoothingDistribution(BASELINE_MODEL_LABEL_SMOOTHING_VALUE, padding_token_id, tgt_vocab_size, device)
 
     custom_lr_optimizer = CustomLRAdamOptimizer(
                 Adam(baseline_transformer.parameters(), betas=(0.9, 0.98), eps=1e-9),
@@ -56,14 +56,14 @@ if __name__ == "__main__":
         src_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, padding_token_id)
 
         # Push to GPU (if we have a GPU on this machine)
-        src_token_ids_batch.to(device)
-        tgt_token_ids_batch.to(device)
-        src_mask.to(device)
-        tgt_mask.to(device)
+        src_token_ids_batch = src_token_ids_batch.to(device)
+        tgt_token_ids_batch = tgt_token_ids_batch.to(device)
+        src_mask = src_mask.to(device)
+        tgt_mask = tgt_mask.to(device)
 
         # log because the KL loss expects log probabilities (just an implementation detail)
         predicted_log_distributions = baseline_transformer(src_token_ids_batch, tgt_token_ids_batch, src_mask, tgt_mask)
-        target_distributions = smoother(tgt_token_ids_batch[:, 1:].view(-1, 1))
+        target_distributions = smoother(tgt_token_ids_batch[:, 1:].reshape(-1, 1))
 
         custom_lr_optimizer.zero_grad()  # clean the gradients of every trainable weight in the computational graph
         loss = loss_fn(predicted_log_distributions, target_distributions)

@@ -46,7 +46,7 @@ class LabelSmoothingDistribution(nn.Module):
         Check out playground.py for visualization of how the smooth target distribution looks like compared to one-hot.
     """
 
-    def __init__(self, smoothing_value, padding_idx, tgt_vocab_size):
+    def __init__(self, smoothing_value, padding_idx, tgt_vocab_size, device):
         assert 0.0 <= smoothing_value <= 1.0
 
         super(LabelSmoothingDistribution, self).__init__()
@@ -56,11 +56,12 @@ class LabelSmoothingDistribution(nn.Module):
 
         self.padding_idx = padding_idx
         self.tgt_vocab_size = tgt_vocab_size
+        self.device = device
 
     def forward(self, tgt_token_ids_batch):
 
         batch_size = tgt_token_ids_batch.shape[0]
-        smooth_target_distributions = torch.zeros((batch_size, self.tgt_vocab_size))
+        smooth_target_distributions = torch.zeros((batch_size, self.tgt_vocab_size), device=self.device)
 
         # -2 because we are not distributing the smoothing mass over the padding index and over the ground truth index
         # those 2 values will be overwritten by the following 2 lines with confidence_value and 0 (for padding index)

@@ -35,7 +35,7 @@ class CustomLRAdamOptimizer:
         return self.model_size ** (-0.5) * min(step ** (-0.5), step * warmup ** (-1.5))
 
 
-class LabelSmoothing(nn.Module):
+class LabelSmoothingDistribution(nn.Module):
     """
         Instead of one-hot target distribution set the target word's probability to "confidence_value" (usually 0.9)
         and distribute the rest of the "smoothing_value" mass (usually 0.1) over the rest of the vocab.
@@ -46,7 +46,7 @@ class LabelSmoothing(nn.Module):
     def __init__(self, smoothing_value, padding_idx, tgt_vocab_size):
         assert 0.0 <= smoothing_value <= 1.0
 
-        super(LabelSmoothing, self).__init__()
+        super(LabelSmoothingDistribution, self).__init__()
 
         self.confidence_value = 1.0 - smoothing_value
         self.smoothing_value = smoothing_value
@@ -59,7 +59,7 @@ class LabelSmoothing(nn.Module):
         batch_size = tgt_token_ids_batch.shape[0]
         smooth_target_distributions = torch.zeros((batch_size, self.tgt_vocab_size))
 
-        # -2 because we are not distributing the smoothing mass over the padding idx and over the ground truth index
+        # -2 because we are not distributing the smoothing mass over the padding index and over the ground truth index
         # those 2 values will be overwritten by the following 2 lines with confidence_value and 0 (for padding index)
         smooth_target_distributions.fill_(self.smoothing_value / (self.tgt_vocab_size - 2))
 
@@ -67,19 +67,19 @@ class LabelSmoothing(nn.Module):
         smooth_target_distributions[:, self.padding_idx] = 0.
 
         # If we had a padding token as a target we set the distribution to all 0s instead of smooth labeled distribution
-        smooth_target_distributions.masked_fill_(smooth_target_distributions == self.padding_idx, 0.)
+        smooth_target_distributions.masked_fill_(tgt_token_ids_batch == self.padding_idx, 0.)
 
         return smooth_target_distributions
 
 
-class OneHot(nn.Module):
+class OneHotDistribution(nn.Module):
     """
         Create a one hot distribution (feel free to ignore used only in playground.py)
     """
 
     def __init__(self, padding_idx, tgt_vocab_size):
 
-        super(OneHot, self).__init__()
+        super(OneHotDistribution, self).__init__()
 
         self.padding_idx = padding_idx
         self.tgt_vocab_size = tgt_vocab_size
@@ -91,6 +91,6 @@ class OneHot(nn.Module):
         one_hot_distribution.scatter_(1, tgt_token_ids_batch, 1.)
 
         # If we had a padding token as a target we set the distribution to all 0s instead of one-hot distribution
-        one_hot_distribution.masked_fill_(one_hot_distribution == self.padding_idx, 0.)
+        one_hot_distribution.masked_fill_(tgt_token_ids_batch == self.padding_idx, 0.)
 
         return one_hot_distribution

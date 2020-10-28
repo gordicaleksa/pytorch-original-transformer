@@ -6,23 +6,44 @@ import numpy as np
 
 
 from transformer_model import PositionalEncoding
-from optimizers_and_loss_fn import CustomLRAdamOptimizer, LabelSmoothing, OneHot
+from optimizers_and_loss_fn import CustomLRAdamOptimizer, LabelSmoothingDistribution, OneHotDistribution
+
+
+def display(imgs_to_display):
+    num_display_imgs = 2
+    assert len(imgs_to_display) == num_display_imgs, f'Expected {num_display_imgs} got {len(imgs_to_display)} images.'
+
+    fig = plt.figure(figsize=(10, 5))
+    title_fontsize = 'x-small'
+    titles = ['one hot distribution', 'label smoothing distribution']
+
+    gs = fig.add_gridspec(1, 2, left=0.02, right=0.98, wspace=0.05, hspace=0.3)
+
+    ax = np.zeros(num_display_imgs, dtype=object)
+    ax[0] = fig.add_subplot(gs[0, 0])
+    ax[1] = fig.add_subplot(gs[0, 1])
+
+    for i in range(num_display_imgs):
+        ax[i].imshow(imgs_to_display[i])
+        ax[i].set_title(titles[i], fontsize=title_fontsize)
+        ax[i].tick_params(which='both', bottom=False, left=False, labelleft=False, labelbottom=False)
+
+    plt.show()
 
 
 def visualize_label_smoothing():
-    padding_idx = 0
-    tgt_vocab_size = 4
-    smoother = LabelSmoothing(smoothing_value=0.1, padding_idx=padding_idx, tgt_vocab_size=tgt_vocab_size)
-    one_hot = OneHot(padding_idx=padding_idx, tgt_vocab_size=tgt_vocab_size)
+    padding_idx = 0  # index 0 of the vocab corresponds to the padding token
+    tgt_vocab_size = 4  # assume only 4 words in our vocab - a toy example
+
+    smooth = LabelSmoothingDistribution(smoothing_value=0.1, padding_idx=padding_idx, tgt_vocab_size=tgt_vocab_size)
+    one_hot = OneHotDistribution(padding_idx=padding_idx, tgt_vocab_size=tgt_vocab_size)
 
     target = torch.tensor([[1], [2], [3], [0]])
 
-    smooth_target_distributions = smoother(target)
+    smooth_target_distributions = smooth(target)
     one_hot_target_distributions = one_hot(target)
 
-    # todo: make a side by side comparision
-    plt.imshow(smooth_target_distributions.numpy()); plt.show()
-    print(smooth_target_distributions)
+    display([one_hot_target_distributions.numpy(), smooth_target_distributions.numpy()])
 
 
 def visualize_custom_lr_adam():

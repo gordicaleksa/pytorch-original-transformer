@@ -10,6 +10,8 @@ import spacy
 from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 
 
+# todo: once I process the data once use cache files (https://github.com/bentrevett/pytorch-sentiment-analysis/issues/6)
+# otherwise it's super slow (~60 seconds on my machine)
 # todo: see whether I should use tgt or trg, also pad_idx or pad_token_idx
 def build_datasets_and_vocabs():
     spacy_de = spacy.load('de')

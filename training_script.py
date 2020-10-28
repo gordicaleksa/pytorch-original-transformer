@@ -11,6 +11,29 @@
 # todo: add a jupyter notebook
 # todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 
+
 from torch import nn
 
-criterion = nn.KLDivLoss(reduction='batchmean')
+
+from constants import *
+from data_utils import get_data_loaders, build_masks_and_count_tokens
+from transformer_model import Transformer
+
+
+if __name__ == "__main__":
+    train_token_ids_loader, val_token_ids_loader, test_token_ids_loader, SRC, TGT = get_data_loaders()
+
+    baseline_transformer = Transformer(
+        model_dimension=BASELINE_MODEL_DIMENSION,
+        src_vocab_size=len(SRC.vocab),
+        tgt_vocab_size=len(TGT.vocab),
+        number_of_heads=BASELINE_MODEL_NUMBER_OF_HEADS,
+        number_of_layers=BASELINE_MODEL_NUMBER_OF_LAYERS,
+        dropout_probability=BASELINE_MODEL_DROPOUT_PROB
+    )
+
+    loss_fn = nn.KLDivLoss(reduction='batchmean')
+
+    for token_ids_batch in train_token_ids_loader:
+        src_token_ids_batch, tgt_token_ids_batch = token_ids_batch.src, token_ids_batch.trg
+        src_padding_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch)

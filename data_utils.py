@@ -10,6 +10,7 @@ import spacy
 from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 
 
+# todo: see whether I should use tgt or trg, also pad_idx or pad_token_idx
 def build_datasets_and_vocabs():
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
@@ -39,16 +40,16 @@ def build_datasets_and_vocabs():
     return train_dataset, val_dataset, test_dataset, SRC, TGT
 
 
-def get_data_loaders():
+def get_data_loaders(batch_size=256):
     train_dataset, val_dataset, test_dataset, SRC, TGT = build_datasets_and_vocabs()
 
     # todo: figure out how to set the optimal batch size
-    # todo: verify that BucketIterator is really minimzing the number of pad tokens
+    # todo: verify that BucketIterator is really minimizing the number of pad tokens
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
      datasets=(train_dataset, val_dataset),
-     batch_sizes=(64, 64),
+     batch_sizes=(batch_size, batch_size),
      device=0,
-     sort_key=lambda x: len(x.comment_text), # the BucketIterator needs to be told what function it should use to group the data.
+     sort_key=lambda x: len(vars(x)['src']), # the BucketIterator needs to be told what function it should use to group the data.
     )
     test_token_ids_loader = Iterator(test_dataset, batch_size=64, device=0, sort=False, sort_within_batch=False, repeat=False)
 
@@ -82,32 +83,36 @@ def sample_text_from_loader(SRC, TGT, token_ids_loader, num_samples=2, sample_sr
             print()
 
 
-def build_masks(src_token_ids_batch, tgt_token_ids_batch, pad_id):
+def build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, padding_token_id):
     batch_size = src_token_ids_batch.shape[0]
 
     # src_padding_mask shape = (B, 1, 1, S) check out attention function in transformer_model.py where masks are applied
     # src_padding_mask only masks pad tokens as we want to ignore their representations (no information there...)
-    src_padding_mask = (src_token_ids_batch != pad_id).view(batch_size, 1, 1, -1)
+    src_padding_mask = (src_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
+    num_src_tokens = torch.sum(src_padding_mask.long())
 
     # Same as src_padding_mask but we additionally want to mask tokens from looking forward into the future tokens
     # Note: wherever the mask value is true we want to attend to that token, otherwise we mask (ignore) it.
     sequence_length = tgt_token_ids_batch.shape[1]
-    tgt_padding_mask = (tgt_token_ids_batch != pad_id).view(batch_size, 1, 1, -1)
+    tgt_padding_mask = (tgt_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
     tgt_no_look_forward_mask = torch.triu(torch.ones((1, 1, sequence_length, sequence_length)) == 1).transpose(2, 3)
 
     # logic AND operation (both padding mask and no-look-forward must be true to attend to a certain token)
     tgt_mask = tgt_padding_mask & tgt_no_look_forward_mask
+    num_tgt_tokens = torch.sum(tgt_padding_mask.long())
 
-    return src_padding_mask, tgt_mask
+    return src_padding_mask, tgt_mask, num_src_tokens, num_tgt_tokens
 
 
-train_token_ids_loader, val_token_ids_loader, test_token_ids_loader, SRC, TGT = get_data_loaders()
+# For testing purposes feel free to ignore
+if __name__ == "__main__":
+    train_token_ids_loader, val_token_ids_loader, test_token_ids_loader, SRC, TGT = get_data_loaders()
 
-for batch in train_token_ids_loader:
-    build_masks(batch.src, batch.trg, 1)
+    for batch in train_token_ids_loader:
+        src_padding_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(batch.src, batch.trg, 1)
 
-print(f'Source vocabulary size={len(SRC.vocab)}')
-print(f'Target vocabulary size={len(TGT.vocab)}')
+    print(f'Source vocabulary size={len(SRC.vocab)}')
+    print(f'Target vocabulary size={len(TGT.vocab)}')
 
-sample_text_from_loader(SRC, TGT, train_token_ids_loader)
+    sample_text_from_loader(SRC, TGT, train_token_ids_loader)
 

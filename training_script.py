@@ -8,6 +8,7 @@
 
 import os
 import argparse
+import time
 
 
 import torch
@@ -58,11 +59,13 @@ def train_transformer(training_config):
     # Step 4: Start the training
     train_loss_data = []
     val_loss_data = []
+    num_of_tgt_tokens_processed = 0
 
+    ts = time.time()
     for epoch in range(training_config['num_of_epochs']):
         # Training loop
         baseline_transformer.train()
-        for token_ids_batch in train_token_ids_loader:
+        for batch_idx, token_ids_batch in enumerate(train_token_ids_loader):
             src_token_ids_batch, tgt_token_ids_batch_input, tgt_token_ids_batch_gt = fetch_src_and_tgt_batches(token_ids_batch)
             src_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch_input, padding_token_id)
 
@@ -87,21 +90,23 @@ def train_transformer(training_config):
             #
 
             train_loss_data.append(loss.item())
+            num_of_tgt_tokens_processed += num_tgt_tokens
 
-            # todo: add logging, number of tokens per second, loss, BLEU
+            # todo: add BLEU
             if training_config['enable_tensorboard']:
                 writer.add_scalar('training_loss', loss.item(), len(train_token_ids_loader) * epoch + batch_idx + 1)
 
             if training_config['console_log_freq'] is not None and batch_idx % training_config['console_log_freq'] == 0:
-                print(
-                    f'GAN training: time elapsed= {(time.time() - ts):.2f} [s] | epoch={epoch + 1} | batch= [{batch_idx + 1}/{len(mnist_data_loader)}]')
+                print(f'Transformer training: time elapsed= {(time.time() - ts):.2f} [s] '
+                      f'| epoch={epoch + 1} | batch= [{batch_idx + 1}/{len(train_token_ids_loader)}] '
+                      f'| target tokens/batch= {num_of_tgt_tokens_processed/training_config["console_log_freq"]}')
 
-            # Save generator checkpoint
-            if training_config['checkpoint_freq'] is not None and (epoch + 1) % training_config[
-                'checkpoint_freq'] == 0 and batch_idx == 0:
-                ckpt_model_name = f"cgan_ckpt_epoch_{epoch + 1}_batch_{batch_idx + 1}.pth"
-                torch.save(utils.get_training_state(generator_net, GANType.CGAN.name),
-                           os.path.join(CHECKPOINTS_PATH, ckpt_model_name))
+                num_of_tgt_tokens_processed = 0
+
+            # Save model checkpoint
+            if training_config['checkpoint_freq'] is not None and (epoch + 1) % training_config['checkpoint_freq'] == 0 and batch_idx == 0:
+                ckpt_model_name = f"transformer_ckpt_epoch_{epoch + 1}_batch_{batch_idx + 1}.pth"
+                torch.save(utils.get_training_state(generator_net, GANType.CGAN.name), os.path.join(CHECKPOINTS_PATH, ckpt_model_name))
 
         # Validation loop
         baseline_transformer.eval()

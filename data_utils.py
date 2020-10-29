@@ -42,7 +42,7 @@ def build_datasets_and_vocabs():
     return train_dataset, val_dataset, test_dataset, SRC, TGT
 
 
-def get_data_loaders(batch_size=32):
+def get_data_loaders(batch_size=8):
     train_dataset, val_dataset, test_dataset, SRC, TGT = build_datasets_and_vocabs()
 
     # todo: figure out how to set the optimal batch size

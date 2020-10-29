@@ -42,7 +42,7 @@ def build_datasets_and_vocabs():
     return train_dataset, val_dataset, test_dataset, SRC, TGT
 
 
-def get_data_loaders(batch_size=64):
+def get_data_loaders(batch_size=32):
     train_dataset, val_dataset, test_dataset, SRC, TGT = build_datasets_and_vocabs()
 
     # todo: figure out how to set the optimal batch size
@@ -104,6 +104,22 @@ def build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, paddi
     num_tgt_tokens = torch.sum(tgt_padding_mask.long())
 
     return src_mask, tgt_mask, num_src_tokens, num_tgt_tokens
+
+
+def fetch_src_and_tgt_batches(token_ids_batch):
+    src_token_ids_batch, tgt_token_ids_batch = token_ids_batch.src, token_ids_batch.trg
+
+    # Input should be shifted by 1 compared to the output tokens
+    # Example: if we had a sentence like: <s>,what,is,up,</s> than to train the NMT model what we do is we pass
+    # <s>,what,is,up to the input as set what,is,up,</s> as the expected output.
+    tgt_token_ids_batch_input = tgt_token_ids_batch[:, :-1]
+
+    # We reshape from (B, S) into (BxS, 1) as that's the the shape expected by LabelSmoothing which will produce
+    # the shape (BxS, V) where V is the target vocab size which is the same shape that comes out from the transformer
+    # so we can directly pass them into KL divergence loss
+    tgt_token_ids_batch_gt = tgt_token_ids_batch[:, 1:].reshape(-1, 1)
+
+    return src_token_ids_batch, tgt_token_ids_batch_input, tgt_token_ids_batch_gt
 
 
 # For testing purposes feel free to ignore

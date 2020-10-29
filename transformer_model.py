@@ -59,9 +59,10 @@ class Transformer(nn.Module):
         tgt_embeddings_batch = self.tgt_pos_embedding(self.tgt_embedding(tgt_token_ids_batch))
         tgt_representations_batch = self.decoder(tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask)
 
+        # Here we have a shape (B, S, V), where B - batch size, S - longest sequence size, V - target vocab size
         tgt_log_probs = self.decoder_generator(tgt_representations_batch)
-        # todo: add a clarification of what I've done here
-        tgt_log_probs = tgt_log_probs[:, :-1]
+
+        # Reshape into (B*S, V) as that's a suitable format for passing it into KL div loss
         tgt_log_probs = tgt_log_probs.reshape(-1, tgt_log_probs.shape[-1])
 
         return tgt_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities

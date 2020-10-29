@@ -17,12 +17,13 @@ from torch import nn
 from torch.optim import Adam
 
 from constants import *
-from data_utils import get_data_loaders, build_masks_and_count_tokens
+from data_utils import get_data_loaders, build_masks_and_count_tokens, fetch_src_and_tgt_batches
 from optimizers_and_loss_fn import CustomLRAdamOptimizer, LabelSmoothingDistribution
 from transformer_model import Transformer
 
 
 if __name__ == "__main__":
+    num_of_epochs = 5
     num_warmup_steps = 4000
     smoothing_value = 0.1
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
@@ -41,7 +42,7 @@ if __name__ == "__main__":
         dropout_probability=BASELINE_MODEL_DROPOUT_PROB
     ).to(device)
 
-    loss_fn = nn.KLDivLoss(reduction='batchmean')
+    kl_div_loss = nn.KLDivLoss(reduction='batchmean')
 
     smoother = LabelSmoothingDistribution(BASELINE_MODEL_LABEL_SMOOTHING_VALUE, padding_token_id, tgt_vocab_size, device)
 
@@ -51,26 +52,31 @@ if __name__ == "__main__":
                 num_warmup_steps
             )
 
-    for token_ids_batch in train_token_ids_loader:
-        src_token_ids_batch, tgt_token_ids_batch = token_ids_batch.src, token_ids_batch.trg
-        src_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, padding_token_id)
+    for epoch in range(num_of_epochs):
+        # Training loop
+        for token_ids_batch in train_token_ids_loader:
+            src_token_ids_batch, tgt_token_ids_batch_input, tgt_token_ids_batch_gt = fetch_src_and_tgt_batches(token_ids_batch)
+            src_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch_input, padding_token_id)
 
-        # Push to GPU (if we have a GPU on this machine)
-        src_token_ids_batch = src_token_ids_batch.to(device)
-        tgt_token_ids_batch = tgt_token_ids_batch.to(device)
-        src_mask = src_mask.to(device)
-        tgt_mask = tgt_mask.to(device)
+            # Push to GPU (if we have a GPU on this machine)
+            src_token_ids_batch = src_token_ids_batch.to(device)
+            tgt_token_ids_batch_input = tgt_token_ids_batch_input.to(device)
+            tgt_token_ids_batch_gt = tgt_token_ids_batch_gt.to(device)
+            src_mask = src_mask.to(device)
+            tgt_mask = tgt_mask.to(device)
 
-        # log because the KL loss expects log probabilities (just an implementation detail)
-        predicted_log_distributions = baseline_transformer(src_token_ids_batch, tgt_token_ids_batch, src_mask, tgt_mask)
-        target_distributions = smoother(tgt_token_ids_batch[:, 1:].reshape(-1, 1))
+            # log because the KL loss expects log probabilities (just an implementation detail)
+            predicted_log_distributions = baseline_transformer(src_token_ids_batch, tgt_token_ids_batch_input, src_mask, tgt_mask)
+            target_distributions = smoother(tgt_token_ids_batch_gt)
 
-        custom_lr_optimizer.zero_grad()  # clean the gradients of every trainable weight in the computational graph
-        loss = loss_fn(predicted_log_distributions, target_distributions)
-        loss.backward()  # compute the gradients for every trainable weight in the computational graph
-        custom_lr_optimizer.step()  # apply the gradients to weights
+            custom_lr_optimizer.zero_grad()  # clean the gradients of every trainable weight in the computational graph
+            loss = kl_div_loss(predicted_log_distributions, target_distributions)
+            loss.backward()  # compute the gradients for every trainable weight in the computational graph
+            custom_lr_optimizer.step()  # apply the gradients to weights
 
-        # todo: add logging, number of tokens per second, loss, BLEU
-        # todo: also add val and test evaluations
+            # todo: add logging, number of tokens per second, loss, BLEU
+
+        # todo: also add val evaluation
+        # Validation loop
 
 

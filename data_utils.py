@@ -42,27 +42,27 @@ def build_datasets_and_vocabs():
     MIN_FREQ = 2
     ts = time.time()
     # todo: investigate how this works
+    # __getattr__ enables us to call .src even though we only have a list of examples, it will yield examples and call
+    # .src/.trg attributes on them which contain tokenized lists as explained earlier
     SRC.build_vocab(train_dataset.src, min_freq=MIN_FREQ)
     TGT.build_vocab(train_dataset.trg, min_freq=MIN_FREQ)
     print(f'Time it took to build vocabs: {time.time() - ts:3f} seconds.')
     return train_dataset, val_dataset, test_dataset, SRC, TGT
 
 
-def get_data_loaders(batch_size=8):
+def get_data_loaders(batch_size, device):
     train_dataset, val_dataset, test_dataset, SRC, TGT = build_datasets_and_vocabs()
-
     # todo: figure out how to set the optimal batch size
     # todo: verify that BucketIterator is really minimizing the number of pad tokens
+    # using default sorting function which
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
      datasets=(train_dataset, val_dataset),
-     batch_sizes=(batch_size, batch_size),
-     device=0,
-     # sort_within_batch=True
-     # sort_key=lambda x: len(vars(x)['src']), # the BucketIterator needs to be told what function it should use to group the data.
+     batch_size=batch_size,
+     device=device,
     )
-    test_token_ids_loader = Iterator(test_dataset, batch_size=64, device=0, sort=False, sort_within_batch=False, repeat=False)
-
-    return train_token_ids_loader, val_token_ids_loader, test_token_ids_loader, SRC, TGT
+    # todo: seems like sort_within_batch is a must and using the non-default batch_size_fn (just counts the num of
+    #  examples when chunking) is a smart idea
+    return train_token_ids_loader, val_token_ids_loader, SRC, TGT
 
 
 def sample_text_from_loader(SRC, TGT, token_ids_loader, num_samples=2, sample_src=True, sample_tgt=True, show_padded=False):
@@ -92,7 +92,7 @@ def sample_text_from_loader(SRC, TGT, token_ids_loader, num_samples=2, sample_sr
             print()
 
 
-def build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, padding_token_id):
+def build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, padding_token_id, device):
     batch_size = src_token_ids_batch.shape[0]
 
     # src_mask shape = (B, 1, 1, S) check out attention function in transformer_model.py where masks are applied
@@ -104,7 +104,7 @@ def build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch, paddi
     # Note: wherever the mask value is true we want to attend to that token, otherwise we mask (ignore) it.
     sequence_length = tgt_token_ids_batch.shape[1]
     tgt_padding_mask = (tgt_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
-    tgt_no_look_forward_mask = torch.triu(torch.ones((1, 1, sequence_length, sequence_length)) == 1).transpose(2, 3)
+    tgt_no_look_forward_mask = torch.triu(torch.ones((1, 1, sequence_length, sequence_length), device=device) == 1).transpose(2, 3)
 
     # logic AND operation (both padding mask and no-look-forward must be true to attend to a certain token)
     tgt_mask = tgt_padding_mask & tgt_no_look_forward_mask

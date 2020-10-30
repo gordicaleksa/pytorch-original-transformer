@@ -26,7 +26,7 @@ def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare data loaders and data-related information
-    train_token_ids_loader, val_token_ids_loader, test_token_ids_loader, SRC, TGT = get_data_loaders()
+    train_token_ids_loader, val_token_ids_loader, SRC, TGT = get_data_loaders(training_config['batch_size'], device)
     assert SRC.vocab.stoi[PAD_TOKEN] == TGT.vocab.stoi[PAD_TOKEN]
 
     padding_token_id = SRC.vocab.stoi[PAD_TOKEN]
@@ -64,14 +64,7 @@ def train_transformer(training_config):
         baseline_transformer.train()
         for batch_idx, token_ids_batch in enumerate(train_token_ids_loader):
             src_token_ids_batch, tgt_token_ids_batch_input, tgt_token_ids_batch_gt = fetch_src_and_tgt_batches(token_ids_batch)
-            src_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch_input, padding_token_id)
-
-            # Push to GPU (if we have a GPU on this machine)
-            src_token_ids_batch = src_token_ids_batch.to(device)
-            tgt_token_ids_batch_input = tgt_token_ids_batch_input.to(device)
-            tgt_token_ids_batch_gt = tgt_token_ids_batch_gt.to(device)
-            src_mask = src_mask.to(device)
-            tgt_mask = tgt_mask.to(device)
+            src_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch_input, padding_token_id, device)
 
             # log because the KL loss expects log probabilities (just an implementation detail)
             predicted_log_distributions = baseline_transformer(src_token_ids_batch, tgt_token_ids_batch_input, src_mask, tgt_mask)
@@ -144,7 +137,7 @@ if __name__ == "__main__":
     #
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=5)
-    parser.add_argument("--batch_size", type=int, help="number of batches", default=16)
+    parser.add_argument("--batch_size", type=int, help="number of batches", default=8)
 
     # logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging", default=True)

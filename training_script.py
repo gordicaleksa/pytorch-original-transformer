@@ -21,6 +21,7 @@ from constants import *
 from data_utils import get_data_loaders, build_masks_and_count_tokens, fetch_src_and_tgt_batches
 from optimizers_and_loss_fn import CustomLRAdamOptimizer, LabelSmoothingDistribution
 from transformer_model import Transformer
+import utils as utils
 
 
 # todo: after I setup the whole train/val loop step through and make sure that attention mechanism, etc. works as expected
@@ -105,13 +106,13 @@ def train_transformer(training_config):
 
             # Save model checkpoint
             if training_config['checkpoint_freq'] is not None and (epoch + 1) % training_config['checkpoint_freq'] == 0 and batch_idx == 0:
-                ckpt_model_name = f"transformer_ckpt_epoch_{epoch + 1}_batch_{batch_idx + 1}.pth"
-                torch.save(utils.get_training_state(generator_net, GANType.CGAN.name), os.path.join(CHECKPOINTS_PATH, ckpt_model_name))
+                ckpt_model_name = f"transformer_ckpt_epoch_{epoch + 1}.pth"
+                torch.save(utils.get_training_state(training_config, baseline_transformer), os.path.join(CHECKPOINTS_PATH, ckpt_model_name))
 
         # Validation loop
         baseline_transformer.eval()
         with torch.no_grad():
-            for token_ids_batch in val_token_ids_loader:
+            for batch_idx, token_ids_batch in enumerate(val_token_ids_loader):
                 src_token_ids_batch, tgt_token_ids_batch_input, tgt_token_ids_batch_gt = fetch_src_and_tgt_batches(token_ids_batch)
                 src_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(src_token_ids_batch, tgt_token_ids_batch_input, padding_token_id)
 
@@ -129,8 +130,11 @@ def train_transformer(training_config):
                 loss = kl_div_loss(predicted_log_distributions, target_distributions)
                 val_loss_data.append(loss.item())
 
+                if training_config['enable_tensorboard']:
+                    writer.add_scalar('val_loss', loss.item(), len(val_token_ids_loader) * epoch + batch_idx + 1)
+
     # Save the latest generator in the binaries directory
-    torch.save(utils.get_training_state(generator_net, GANType.CGAN.name), os.path.join(BINARIES_PATH, utils.get_available_binary_name(GANType.CGAN)))
+    torch.save(utils.get_training_state(training_config, baseline_transformer), os.path.join(BINARIES_PATH, utils.get_available_binary_name()))
 
 
 if __name__ == "__main__":

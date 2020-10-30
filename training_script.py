@@ -1,9 +1,5 @@
-# todo: step4 - add beam search and other missing components
-# todo: step5 - train the model and report BLEU
-# todo: step6 - write README and open-source
-
-# todo: take a look at the naming used in the original paper
-# todo: use built-in blocks but implement them myself also
+# todo: train the model and report BLEU
+# todo: write README (add attention visualization to README) and open-source
 # todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 
 import os
@@ -147,7 +143,7 @@ if __name__ == "__main__":
     # modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
     #
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_epochs", type=int, help="number of training epochs", default=5)
+    parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=5)
     parser.add_argument("--batch_size", type=int, help="number of batches", default=16)
 
     # logging/debugging/checkpoint related (helps a lot with experimentation)

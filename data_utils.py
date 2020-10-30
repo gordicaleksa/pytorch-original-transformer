@@ -2,7 +2,7 @@ import time
 
 
 import torch
-from torchtext.data import Iterator, BucketIterator, Field
+from torchtext.data import Iterator, BucketIterator, Field, Example
 from torchtext import datasets
 import spacy
 
@@ -10,6 +10,7 @@ import spacy
 from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 
 
+# todo: add BPE
 # todo: once I process the data once use cache files (https://github.com/bentrevett/pytorch-sentiment-analysis/issues/6)
 # otherwise it's super slow (~60 seconds on my machine)
 # todo: see whether I should use tgt or trg, also pad_idx or pad_token_idx
@@ -29,13 +30,18 @@ def build_datasets_and_vocabs():
     MAX_LEN = 100
     ts = time.time()
     # todo: try first with this smaller dataset latter add support for WMT-14 as well
-    train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(exts=('.de', '.en'), fields=(SRC, TGT),
-                                             filter_pred=lambda x: len(vars(x)['src']) <= MAX_LEN and len(
-                                                 vars(x)['trg']) <= MAX_LEN)
+
+    # it's got a list of examples where example is simply an object that has .src and .trg attributes which
+    # contain a tokenized list of strings using the provided tokenizer functions (tokenize_en, tokenize_de).
+    # It's that simple. It also internally save self.fields = {'src': SRC, 'trg': TRG} that's it. i.e. we can
+    # consider our datasets as 2 columns src and trg each containing fields with tokenized strings
+    train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(exts=('.de', '.en'), fields=[('src', SRC), ('trg', TGT)],
+                                             filter_pred=lambda x: len(x.src) <= MAX_LEN and len(x.trg) <= MAX_LEN)
     print(f'Time it took to load the data: {time.time() - ts:3f} seconds.')
 
     MIN_FREQ = 2
     ts = time.time()
+    # todo: investigate how this works
     SRC.build_vocab(train_dataset.src, min_freq=MIN_FREQ)
     TGT.build_vocab(train_dataset.trg, min_freq=MIN_FREQ)
     print(f'Time it took to build vocabs: {time.time() - ts:3f} seconds.')
@@ -51,6 +57,7 @@ def get_data_loaders(batch_size=8):
      datasets=(train_dataset, val_dataset),
      batch_sizes=(batch_size, batch_size),
      device=0,
+     # sort_within_batch=True
      # sort_key=lambda x: len(vars(x)['src']), # the BucketIterator needs to be told what function it should use to group the data.
     )
     test_token_ids_loader = Iterator(test_dataset, batch_size=64, device=0, sort=False, sort_within_batch=False, repeat=False)
@@ -124,13 +131,33 @@ def fetch_src_and_tgt_batches(token_ids_batch):
 
 # For testing purposes feel free to ignore
 if __name__ == "__main__":
-    train_token_ids_loader, val_token_ids_loader, test_token_ids_loader, SRC, TGT = get_data_loaders()
+    # train_token_ids_loader, val_token_ids_loader, test_token_ids_loader, SRC, TGT = get_data_loaders()
+    #
+    # for batch in train_token_ids_loader:
+    #     src_padding_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(batch.src, batch.trg, 1)
+    #
+    # print(f'Source vocabulary size={len(SRC.vocab)}')
+    # print(f'Target vocabulary size={len(TGT.vocab)}')
+    #
+    # sample_text_from_loader(SRC, TGT, train_token_ids_loader)
 
-    for batch in train_token_ids_loader:
-        src_padding_mask, tgt_mask, num_src_tokens, num_tgt_tokens = build_masks_and_count_tokens(batch.src, batch.trg, 1)
+    spacy_de = spacy.load('de')
+    spacy_en = spacy.load('en')
 
-    print(f'Source vocabulary size={len(SRC.vocab)}')
-    print(f'Target vocabulary size={len(TGT.vocab)}')
 
-    sample_text_from_loader(SRC, TGT, train_token_ids_loader)
+    def tokenize_de(text):
+        return [tok.text for tok in spacy_de.tokenizer(text)]
 
+
+    def tokenize_en(text):
+        return [tok.text for tok in spacy_en.tokenizer(text)]
+
+
+    SRC = Field(tokenize=tokenize_de, pad_token=PAD_TOKEN, batch_first=True)
+    TGT = Field(tokenize=tokenize_en, init_token=BOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN, batch_first=True)
+
+    src_line = 'Ich bin.'
+    trg_line = 'I am'
+    fields = [('src', SRC), ('trg', TGT)]
+    ex = Example.fromlist([src_line, trg_line], fields)
+    print(ex.src, ex.trg)

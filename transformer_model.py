@@ -23,6 +23,7 @@ import torch.nn as nn
 from constants import *
 
 
+# todo: consider sharing the embeddings as in the original paper
 # todo: after I get the training up and running verify that this design is the best one
 class Transformer(nn.Module):
 
@@ -48,15 +49,17 @@ class Transformer(nn.Module):
         self.init_params()
 
     def init_params(self):
-        # todo: potentially add special initialization (not mentioned in the paper though)
+        # todo: potentially add special initialization (not mentioned in the paper though, checkout tensor2tensor lib)
         print('dummy')
 
     def forward(self, src_token_ids_batch, tgt_token_ids_batch, src_mask, tgt_mask):
         # todo: comment everything once I finished the initial design
-        src_embeddings_batch = self.src_pos_embedding(self.src_embedding(src_token_ids_batch))
+        src_embeddings_batch = self.src_embedding(src_token_ids_batch)  # get embedding vectors for token ids
+        src_embeddings_batch = self.src_pos_embedding(src_embeddings_batch)  # add positional embedding
         src_representations_batch = self.encoder(src_embeddings_batch, src_mask)
 
-        tgt_embeddings_batch = self.tgt_pos_embedding(self.tgt_embedding(tgt_token_ids_batch))
+        tgt_embeddings_batch = self.tgt_embedding(tgt_token_ids_batch)  # get embedding vectors for token ids
+        tgt_embeddings_batch = self.tgt_pos_embedding(tgt_embeddings_batch)  # add positional embedding
         tgt_representations_batch = self.decoder(tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask)
 
         # Here we have a shape (B, S, V), where B - batch size, S - longest sequence size, V - target vocab size
@@ -281,7 +284,6 @@ class MultiHeadedAttention(nn.Module):
         # to locations corresponding to those words (make softmax output 0 probability on those locations).
         # mask shape = (B, 1, 1, S) will get broad-casted (copied) as needed to match scores shape
         if mask is not None:
-            # todo: check whether my mask will be boolean
             scores.masked_fill_(mask == torch.tensor(False), float("-inf"))
 
         # Step 3: Calculate the attention weights - how much should we attend to surrounding token representations

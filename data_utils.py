@@ -1,13 +1,35 @@
 import time
+import os
 
 
 import torch
-from torchtext.data import Iterator, BucketIterator, Field, Example
+from torchtext.data import Dataset, BucketIterator, Field, Example
+from torchtext.data.utils import interleave_keys
 from torchtext import datasets
+from torchtext.datasets import TranslationDataset
 import spacy
 
 
 from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
+
+
+class FastTranslationDataset(Dataset):
+    @staticmethod
+    def sort_key(ex):
+        return interleave_keys(len(ex.src), len(ex.trg))
+
+    def __init__(self, path, exts, fields, **kwargs):
+
+        # todo: instead of tokenizing every single time cache it and load - see how much faster I get my results
+        examples = []
+        ex = Example()
+
+        setattr(ex, 'src', ...)
+        setattr(ex, 'src', ...)
+        examples.append(ex)
+
+        # Call the parent class Dataset's constructor
+        super().__init__(examples, fields, **kwargs)
 
 
 # todo: add BPE
@@ -15,6 +37,8 @@ from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 # otherwise it's super slow (~60 seconds on my machine)
 # todo: see whether I should use tgt or trg, also pad_idx or pad_token_idx
 def build_datasets_and_vocabs():
+
+
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
 
@@ -41,7 +65,6 @@ def build_datasets_and_vocabs():
 
     MIN_FREQ = 2
     ts = time.time()
-    # todo: investigate how this works
     # __getattr__ enables us to call .src even though we only have a list of examples, it will yield examples and call
     # .src/.trg attributes on them which contain tokenized lists as explained earlier
     SRC.build_vocab(train_dataset.src, min_freq=MIN_FREQ)
@@ -62,6 +85,7 @@ def get_data_loaders(batch_size, device):
     )
     # todo: seems like sort_within_batch is a must and using the non-default batch_size_fn (just counts the num of
     #  examples when chunking) is a smart idea
+    # todo: bug in pytorch if sort_within_batch is not set to True it's not grouping according to length!?
     return train_token_ids_loader, val_token_ids_loader, SRC, TGT
 
 

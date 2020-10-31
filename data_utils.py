@@ -15,8 +15,10 @@ from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 class FastTranslationDataset(Dataset):
     """
         After understanding the source code of torch text's IWSLT, TranslationDataset and Dataset I realized how I
-        can make data preparation much faster (tokenization was taking a lot of time and there is no need to redo it)
-        by using a simple caching mechanism - this dataset leverages that caching mechanism.
+        can make data preparation much faster (tokenization was taking a lot of time and there is no need to redo it
+        every time) by using a simple caching mechanism.
+
+        This dataset leverages that caching mechanism which reduced loading time from ~70s -> 2.5s (massive!)
 
     """
 
@@ -28,7 +30,7 @@ class FastTranslationDataset(Dataset):
         return interleave_keys(len(ex.src), len(ex.trg))
 
     def __init__(self, cache_path, fields, **kwargs):
-        # save_cache interleaves src and trg examples so we read it having that format in mind
+        # save_cache interleaves src and trg examples so here we read the cache file having that format in mind
         cached_data = [line.split() for line in open(cache_path, encoding='utf-8')]
 
         cached_data_src = cached_data[0::2]  # Even lines contain source examples
@@ -137,8 +139,42 @@ def build_datasets_and_vocabs():
     return train_dataset, val_dataset, src_field_processor, trg_field_processor
 
 
-# todo: add custom batch_size_fn
-# todo: understand yield a bit better
+global longest_src_sentence, longest_trg_sentence
+
+
+def batch_size_fn(new_example, count, sofar):
+    """
+        If we use this function in the BucketIterator the batch_size is no longer the number of examples/sentences
+        in a batch but a number of tokens in a batch - which allows us to max out VRAM on a given GPU.
+
+        Example: if we don't use this function and we set batch size to say 10 we will sometimes end up with
+        a tensor of size (10, 100) because the longest sentence had a size of 100 tokens but other times we'll end
+        up with a size of (10, 5) because the longest sentence had only 5 tokens!
+
+        With this function what we do is we specify that source and target tensors can't go over a certain number
+        of tokens like 1000. So usually either source or target tensors will contain around 1000 tokens and
+        in worst case both will be really close to a 1000 tokens each. If that is still below max VRAM availabe on
+        the system we're using the max potential of our GPU w.r.t. VRAM.
+
+        Note: to understand this function you unfortunately would probably have to dig deeper into torch text's
+        source code.
+
+    """
+    global longest_src_sentence, longest_trg_sentence
+
+    if count == 1:
+        longest_src_sentence = 0
+        longest_trg_sentence = 0
+
+    longest_src_sentence = max(longest_src_sentence, len(new_example.src))
+    longest_trg_sentence = max(longest_trg_sentence, len(new_example.trg) + 2)
+
+    num_of_tokens_in_src_tensor = count * longest_src_sentence
+    num_of_tokens_in_trg_tensor = count * longest_trg_sentence
+
+    return max(num_of_tokens_in_src_tensor, num_of_tokens_in_trg_tensor)
+
+
 # https://github.com/pytorch/text/issues/536#issuecomment-719945594 <- there is a "bug" in BucketIterator i.e. it's
 # description is misleading as it won't group examples of similar length unless you set sort_within_batch to True!
 def get_data_loaders(batch_size, device):
@@ -149,7 +185,8 @@ def get_data_loaders(batch_size, device):
      datasets=(train_dataset, val_dataset),
      batch_size=batch_size,
      device=device,
-     sort_within_batch=True
+     sort_within_batch=True,
+     batch_size_fn=batch_size_fn
     )
 
     return train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor

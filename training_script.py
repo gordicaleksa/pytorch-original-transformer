@@ -1,5 +1,6 @@
 # todo: train the model and report BLEU
-# todo: write README (add attention visualization to README) and open-source
+# todo: write README (add attention visualization to README, plot signal tokens vs pad tokens for different
+#  bucketiterator setup) and open-source
 # todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 
 import os
@@ -11,6 +12,7 @@ import torch
 from torch import nn
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
+import matplotlib.pyplot as plt
 
 
 from constants import *
@@ -137,7 +139,7 @@ if __name__ == "__main__":
     #
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=5)
-    parser.add_argument("--batch_size", type=int, help="number of batches", default=8)
+    parser.add_argument("--batch_size", type=int, help="number of batches", default=1500)
 
     # logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging", default=True)

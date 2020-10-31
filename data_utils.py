@@ -151,6 +151,7 @@ def get_data_loaders(batch_size, device):
      datasets=(train_dataset, val_dataset),
      batch_size=batch_size,
      device=device,
+     sort_within_batch=True
     )
 
     return train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor

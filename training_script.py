@@ -26,17 +26,17 @@ def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare data loaders and data-related information
-    train_token_ids_loader, val_token_ids_loader, SRC, TRG = get_data_loaders(training_config['batch_size'], device)
-    assert SRC.vocab.stoi[PAD_TOKEN] == TRG.vocab.stoi[PAD_TOKEN]
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['batch_size'], device)
+    assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
 
-    pad_token_id = SRC.vocab.stoi[PAD_TOKEN]
-    trg_vocab_size = len(TRG.vocab)
+    pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]
+    trg_vocab_size = len(trg_field_processor.vocab)
 
     # Step 2: Prepare the model (transformer)
     baseline_transformer = Transformer(
         model_dimension=BASELINE_MODEL_DIMENSION,
-        src_vocab_size=len(SRC.vocab),
-        trg_vocab_size=len(TRG.vocab),
+        src_vocab_size=len(src_field_processor.vocab),
+        trg_vocab_size=len(trg_field_processor.vocab),
         number_of_heads=BASELINE_MODEL_NUMBER_OF_HEADS,
         number_of_layers=BASELINE_MODEL_NUMBER_OF_LAYERS,
         dropout_probability=BASELINE_MODEL_DROPOUT_PROB

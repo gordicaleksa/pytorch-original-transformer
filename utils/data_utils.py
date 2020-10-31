@@ -86,7 +86,7 @@ def save_cache(cache_path, dataset):
 
 # todo: add BPE
 # todo: try first with this smaller dataset latter add support for WMT-14 as well
-def build_datasets_and_vocabs():
+def build_datasets_and_vocabs(use_caching_mechanism=True):
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
 
@@ -113,7 +113,7 @@ def build_datasets_and_vocabs():
 
     # This simple caching mechanism gave me ~30x speedup on my machine! From ~70s -> ~2.5s!
     ts = time.time()
-    if not (os.path.exists(train_cache_path) and os.path.exists(val_cache_path)):
+    if not use_caching_mechanism or not (os.path.exists(train_cache_path) and os.path.exists(val_cache_path)):
         # dataset objects have a list of examples where example is simply an empty Python Object that has
         # .src and .trg attributes which contain a tokenized list of strings (created by tokenize_en and tokenize_de).
         # It's that simple, we can consider our datasets as a table with 2 columns 'src' and 'trg'
@@ -177,6 +177,7 @@ def batch_size_fn(new_example, count, sofar):
         longest_trg_sentence = 0
 
     longest_src_sentence = max(longest_src_sentence, len(new_example.src))
+    # 2 because of start/end of sentence tokens (<s> and </s>)
     longest_trg_sentence = max(longest_trg_sentence, len(new_example.trg) + 2)
 
     num_of_tokens_in_src_tensor = count * longest_src_sentence

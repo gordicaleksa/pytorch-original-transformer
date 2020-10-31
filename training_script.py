@@ -59,6 +59,7 @@ def train_transformer(training_config):
     num_of_trg_tokens_processed = 0
 
     ts = time.time()
+    global_train_step, global_val_step = [0, 0]
     for epoch in range(training_config['num_of_epochs']):
         # Training loop
         baseline_transformer.train()
@@ -79,18 +80,17 @@ def train_transformer(training_config):
             # Logging and checkpoint creation
             #
 
+            # todo: add BLEU
             train_loss_data.append(loss.item())
             num_of_trg_tokens_processed += num_trg_tokens
+            global_train_step += 1
 
-            # todo: next steps: fix this, paper number of tokens and type of GPU, greedy decoding on checkpoint model
-
-            # todo: add BLEU
             if training_config['enable_tensorboard']:
-                writer.add_scalar('training_loss', loss.item(), len(train_token_ids_loader) * epoch + batch_idx + 1)
+                writer.add_scalar('training_loss', loss.item(), global_train_step)
 
             if training_config['console_log_freq'] is not None and batch_idx % training_config['console_log_freq'] == 0:
                 print(f'Transformer training: time elapsed= {(time.time() - ts):.2f} [s] '
-                      f'| epoch={epoch + 1} | batch= [{batch_idx + 1}/{len(train_token_ids_loader)}] '
+                      f'| epoch={epoch + 1} | batch= [{batch_idx + 1}] '
                       f'| target tokens/batch= {num_of_trg_tokens_processed/training_config["console_log_freq"]}')
 
                 num_of_trg_tokens_processed = 0
@@ -121,8 +121,10 @@ def train_transformer(training_config):
                 loss = kl_div_loss(predicted_log_distributions, target_distributions)
                 val_loss_data.append(loss.item())
 
+                global_val_step += 1
+
                 if training_config['enable_tensorboard']:
-                    writer.add_scalar('val_loss', loss.item(), len(val_token_ids_loader) * epoch + batch_idx + 1)
+                    writer.add_scalar('val_loss', loss.item(), global_val_step)
 
     # Save the latest generator in the binaries directory
     torch.save(utils.get_training_state(training_config, baseline_transformer), os.path.join(BINARIES_PATH, utils.get_available_binary_name()))
@@ -139,7 +141,7 @@ if __name__ == "__main__":
     #
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=5)
-    parser.add_argument("--batch_size", type=int, help="number of batches", default=1500)
+    parser.add_argument("--batch_size", type=int, help="target number of tokens in a src/trg batch", default=1500)
 
     # logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging", default=True)

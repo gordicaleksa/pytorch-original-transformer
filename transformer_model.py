@@ -27,14 +27,14 @@ from constants import *
 # todo: after I get the training up and running verify that this design is the best one
 class Transformer(nn.Module):
 
-    def __init__(self, model_dimension, src_vocab_size, tgt_vocab_size, number_of_heads, number_of_layers, dropout_probability):
+    def __init__(self, model_dimension, src_vocab_size, trg_vocab_size, number_of_heads, number_of_layers, dropout_probability):
         super().__init__()
 
         self.src_embedding = Embedding(src_vocab_size, model_dimension)
         self.src_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
 
-        self.tgt_embedding = Embedding(tgt_vocab_size, model_dimension)
-        self.tgt_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
+        self.trg_embedding = Embedding(trg_vocab_size, model_dimension)
+        self.trg_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
 
         # All of these will get deep-copied internally
         mha = MultiHeadedAttention(model_dimension, number_of_heads, dropout_probability)
@@ -45,30 +45,30 @@ class Transformer(nn.Module):
         self.encoder = Encoder(encoder_layer, number_of_layers)
         self.decoder = Decoder(decoder_layer, number_of_layers)
 
-        self.decoder_generator = DecoderGenerator(model_dimension, tgt_vocab_size)
+        self.decoder_generator = DecoderGenerator(model_dimension, trg_vocab_size)
         self.init_params()
 
     def init_params(self):
         # todo: potentially add special initialization (not mentioned in the paper though, checkout tensor2tensor lib)
         print('dummy')
 
-    def forward(self, src_token_ids_batch, tgt_token_ids_batch, src_mask, tgt_mask):
+    def forward(self, src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask):
         # todo: comment everything once I finished the initial design
         src_embeddings_batch = self.src_embedding(src_token_ids_batch)  # get embedding vectors for token ids
         src_embeddings_batch = self.src_pos_embedding(src_embeddings_batch)  # add positional embedding
         src_representations_batch = self.encoder(src_embeddings_batch, src_mask)
 
-        tgt_embeddings_batch = self.tgt_embedding(tgt_token_ids_batch)  # get embedding vectors for token ids
-        tgt_embeddings_batch = self.tgt_pos_embedding(tgt_embeddings_batch)  # add positional embedding
-        tgt_representations_batch = self.decoder(tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask)
+        trg_embeddings_batch = self.trg_embedding(trg_token_ids_batch)  # get embedding vectors for token ids
+        trg_embeddings_batch = self.trg_pos_embedding(trg_embeddings_batch)  # add positional embedding
+        trg_representations_batch = self.decoder(trg_embeddings_batch, src_representations_batch, trg_mask, src_mask)
 
         # Here we have a shape (B, S, V), where B - batch size, S - longest sequence size, V - target vocab size
-        tgt_log_probs = self.decoder_generator(tgt_representations_batch)
+        trg_log_probs = self.decoder_generator(trg_representations_batch)
 
         # Reshape into (B*S, V) as that's a suitable format for passing it into KL div loss
-        tgt_log_probs = tgt_log_probs.reshape(-1, tgt_log_probs.shape[-1])
+        trg_log_probs = trg_log_probs.reshape(-1, trg_log_probs.shape[-1])
 
-        return tgt_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities
+        return trg_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities
 
 
 #
@@ -134,15 +134,15 @@ class Decoder(nn.Module):
         self.decoder_layers = get_clones(decoder_layer, number_of_layers)
         self.norm = nn.LayerNorm(decoder_layer.model_dimension)
 
-    def forward(self, tgt_embeddings_batch, src_representations_batch, tgt_mask, src_mask):
+    def forward(self, trg_embeddings_batch, src_representations_batch, trg_mask, src_mask):
         # Just update the naming so as to reflect the semantics of what this var will become
-        tgt_representations_batch = tgt_embeddings_batch
+        trg_representations_batch = trg_embeddings_batch
 
         for decoder_layer in self.decoder_layers:
-            tgt_representations_batch = decoder_layer(tgt_representations_batch, src_representations_batch, tgt_mask, src_mask)
+            trg_representations_batch = decoder_layer(trg_representations_batch, src_representations_batch, trg_mask, src_mask)
 
         # not mentioned explicitly in the paper
-        return self.norm(tgt_representations_batch)
+        return self.norm(trg_representations_batch)
 
 
 class DecoderLayer(nn.Module):
@@ -152,24 +152,24 @@ class DecoderLayer(nn.Module):
         num_of_sublayers_decoder = 3
         self.sublayers = get_clones(SublayerLogic(model_dimension, dropout_probability), num_of_sublayers_decoder)
 
-        self.tgt_multi_headed_attention = copy.deepcopy(multi_headed_attention)
+        self.trg_multi_headed_attention = copy.deepcopy(multi_headed_attention)
         self.src_multi_headed_attention = copy.deepcopy(multi_headed_attention)
         self.pointwise_net = pointwise_net
 
         self.model_dimension = model_dimension
 
-    def forward(self, tgt_representations_batch, src_representations_batch, tgt_mask, src_mask):
-        # Define anonymous (lambda) function which only takes tgt_representations_batch (trb - funny name I know)
+    def forward(self, trg_representations_batch, src_representations_batch, trg_mask, src_mask):
+        # Define anonymous (lambda) function which only takes trg_representations_batch (trb - funny name I know)
         # as input - this way we have a uniform interface for the sublayer logic.
         srb = src_representations_batch
-        decoder_tgt_self_attention = lambda trb: self.tgt_multi_headed_attention(query=trb, key=trb, value=trb, mask=tgt_mask)
+        decoder_trg_self_attention = lambda trb: self.trg_multi_headed_attention(query=trb, key=trb, value=trb, mask=trg_mask)
         decoder_src_self_attention = lambda trb: self.src_multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
 
-        tgt_representations_batch = self.sublayers[0](tgt_representations_batch, decoder_tgt_self_attention)
-        tgt_representations_batch = self.sublayers[1](tgt_representations_batch, decoder_src_self_attention)
-        tgt_representations_batch = self.sublayers[2](tgt_representations_batch, self.pointwise_net)
+        trg_representations_batch = self.sublayers[0](trg_representations_batch, decoder_trg_self_attention)
+        trg_representations_batch = self.sublayers[1](trg_representations_batch, decoder_src_self_attention)
+        trg_representations_batch = self.sublayers[2](trg_representations_batch, self.pointwise_net)
 
-        return tgt_representations_batch
+        return trg_representations_batch
 
 
 #
@@ -187,8 +187,8 @@ class DecoderGenerator(nn.Module):
         # again using log softmax as PyTorch's nn.KLDivLoss expects log probabilities (just a technical detail)
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
-    def forward(self, tgt_representations_batch):
-        return self.log_softmax(self.linear(tgt_representations_batch))
+    def forward(self, trg_representations_batch):
+        return self.log_softmax(self.linear(trg_representations_batch))
 
 
 # Note: the original paper had LayerNorm AFTER the residual connection and addition operation
@@ -384,7 +384,7 @@ def analyze_state_dict_shapes_and_names(model):
     # This part helped me figure out that I don't have positional encodings saved in the state dict
     print(model.state_dict().keys())
 
-    # This part helped me see that src MHA was missing in the decoder since both it and tgt MHA were referencing
+    # This part helped me see that src MHA was missing in the decoder since both it and trg MHA were referencing
     # the same MHA object in memory - stupid mistake, happens all the time, embrace the suck!
     for name, param in model.named_parameters():
         print(name, param.shape)
@@ -398,14 +398,14 @@ if __name__ == "__main__":
 
     # Dummy data
     src_vocab_size = 11
-    tgt_vocab_size = 11
+    trg_vocab_size = 11
     src_token_ids_batch = torch.randint(1, 10, size=(3, 2))
-    tgt_token_ids_batch = torch.randint(1, 10, size=(3, 2))
+    trg_token_ids_batch = torch.randint(1, 10, size=(3, 2))
 
     transformer = Transformer(
         model_dimension=BIG_MODEL_DIMENSION if use_big_transformer else BASELINE_MODEL_DIMENSION,
         src_vocab_size=src_vocab_size,
-        tgt_vocab_size=tgt_vocab_size,
+        trg_vocab_size=trg_vocab_size,
         number_of_heads=BIG_MODEL_NUMBER_OF_HEADS if use_big_transformer else BASELINE_MODEL_NUMBER_OF_HEADS,
         number_of_layers=BIG_MODEL_NUMBER_OF_LAYERS if use_big_transformer else BASELINE_MODEL_NUMBER_OF_LAYERS,
         dropout_probability=BIG_MODEL_DROPOUT_PROB if use_big_transformer else BASELINE_MODEL_DROPOUT_PROB
@@ -413,10 +413,10 @@ if __name__ == "__main__":
 
     # These 2 functions helped me figure out the 2 bugs I had:
     # 1) I did not register positional encodings and thus they wouldn't be saved and later model-loading would fail
-    # 2) I had a bug with MHA (attention) in decoder, where both src and tgt were referencing the same MHA object in mem
+    # 2) I had a bug with MHA (attention) in decoder, where both src and trg were referencing the same MHA object in mem
     # It's a good practice to see whether the names, shapes and number of params make sense.
     # e.g. I knew that the big transformer had ~175 M params and I verified that here.
     analyze_state_dict_shapes_and_names(transformer)
     print(f'Size of the {"big" if use_big_transformer else "baseline"} transformer = {count_parameters(transformer)}')
 
-    out = transformer(src_token_ids_batch, tgt_token_ids_batch, src_mask=None, tgt_mask=None)
+    out = transformer(src_token_ids_batch, trg_token_ids_batch, src_mask=None, trg_mask=None)

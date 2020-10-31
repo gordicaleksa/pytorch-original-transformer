@@ -46,7 +46,7 @@ class LabelSmoothingDistribution(nn.Module):
         Check out playground.py for visualization of how the smooth target distribution looks like compared to one-hot.
     """
 
-    def __init__(self, smoothing_value, padding_idx, tgt_vocab_size, device):
+    def __init__(self, smoothing_value, padding_idx, trg_vocab_size, device):
         assert 0.0 <= smoothing_value <= 1.0
 
         super(LabelSmoothingDistribution, self).__init__()
@@ -55,7 +55,7 @@ class LabelSmoothingDistribution(nn.Module):
         self.smoothing_value = smoothing_value
 
         self.padding_idx = padding_idx
-        self.tgt_vocab_size = tgt_vocab_size
+        self.tgt_vocab_size = trg_vocab_size
         self.device = device
 
     def forward(self, tgt_token_ids_batch):
@@ -81,17 +81,17 @@ class OneHotDistribution(nn.Module):
         Create a one hot distribution (feel free to ignore used only in playground.py)
     """
 
-    def __init__(self, padding_idx, tgt_vocab_size):
+    def __init__(self, padding_idx, trg_vocab_size):
 
         super(OneHotDistribution, self).__init__()
 
         self.padding_idx = padding_idx
-        self.tgt_vocab_size = tgt_vocab_size
+        self.trg_vocab_size = trg_vocab_size
 
     def forward(self, tgt_token_ids_batch):
 
         batch_size = tgt_token_ids_batch.shape[0]
-        one_hot_distribution = torch.zeros((batch_size, self.tgt_vocab_size))
+        one_hot_distribution = torch.zeros((batch_size, self.trg_vocab_size))
         one_hot_distribution.scatter_(1, tgt_token_ids_batch, 1.)
 
         # If we had a padding token as a target we set the distribution to all 0s instead of one-hot distribution

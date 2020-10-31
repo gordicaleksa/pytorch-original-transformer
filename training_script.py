@@ -29,7 +29,7 @@ def train_transformer(training_config):
     train_token_ids_loader, val_token_ids_loader, SRC, TRG = get_data_loaders(training_config['batch_size'], device)
     assert SRC.vocab.stoi[PAD_TOKEN] == TRG.vocab.stoi[PAD_TOKEN]
 
-    padding_token_id = SRC.vocab.stoi[PAD_TOKEN]
+    pad_token_id = SRC.vocab.stoi[PAD_TOKEN]
     trg_vocab_size = len(TRG.vocab)
 
     # Step 2: Prepare the model (transformer)
@@ -45,7 +45,7 @@ def train_transformer(training_config):
     # Step 3: Prepare other training related utilities
     kl_div_loss = nn.KLDivLoss(reduction='batchmean')
 
-    smoother = LabelSmoothingDistribution(BASELINE_MODEL_LABEL_SMOOTHING_VALUE, padding_token_id, trg_vocab_size, device)
+    smoother = LabelSmoothingDistribution(BASELINE_MODEL_LABEL_SMOOTHING_VALUE, pad_token_id, trg_vocab_size, device)
 
     custom_lr_optimizer = CustomLRAdamOptimizer(
                 Adam(baseline_transformer.parameters(), betas=(0.9, 0.98), eps=1e-9),
@@ -64,7 +64,7 @@ def train_transformer(training_config):
         baseline_transformer.train()
         for batch_idx, token_ids_batch in enumerate(train_token_ids_loader):
             src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = fetch_src_and_trg_batches(token_ids_batch)
-            src_mask, trg_mask, num_src_tokens, num_trg_tokens = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch_input, padding_token_id, device)
+            src_mask, trg_mask, num_src_tokens, num_trg_tokens = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch_input, pad_token_id, device)
 
             # log because the KL loss expects log probabilities (just an implementation detail)
             predicted_log_distributions = baseline_transformer(src_token_ids_batch, trg_token_ids_batch_input, src_mask, trg_mask)
@@ -103,7 +103,7 @@ def train_transformer(training_config):
         with torch.no_grad():
             for batch_idx, token_ids_batch in enumerate(val_token_ids_loader):
                 src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = fetch_src_and_trg_batches(token_ids_batch)
-                src_mask, trg_mask, num_src_tokens, num_trg_tokens = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch_input, padding_token_id)
+                src_mask, trg_mask, num_src_tokens, num_trg_tokens = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch_input, pad_token_id)
 
                 # Push to GPU (if we have a GPU on this machine)
                 src_token_ids_batch = src_token_ids_batch.to(device)

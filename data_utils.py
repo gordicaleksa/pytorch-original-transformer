@@ -56,7 +56,6 @@ def save_cache(cache_path, dataset):
 
 
 # todo: add BPE
-# todo: see whether I should use tgt or trg, also pad_idx or pad_token_idx
 def build_datasets_and_vocabs():
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
@@ -158,18 +157,18 @@ def sample_text_from_loader(SRC, TRG, token_ids_loader, num_samples=2, sample_sr
             print()
 
 
-def build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, padding_token_id, device):
+def build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device):
     batch_size = src_token_ids_batch.shape[0]
 
     # src_mask shape = (B, 1, 1, S) check out attention function in transformer_model.py where masks are applied
     # src_mask only masks pad tokens as we want to ignore their representations (no information there...)
-    src_mask = (src_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
+    src_mask = (src_token_ids_batch != pad_token_id).view(batch_size, 1, 1, -1)
     num_src_tokens = torch.sum(src_mask.long())
 
     # Same as src_mask but we additionally want to mask tokens from looking forward into the future tokens
     # Note: wherever the mask value is true we want to attend to that token, otherwise we mask (ignore) it.
     sequence_length = trg_token_ids_batch.shape[1]
-    trg_padding_mask = (trg_token_ids_batch != padding_token_id).view(batch_size, 1, 1, -1)
+    trg_padding_mask = (trg_token_ids_batch != pad_token_id).view(batch_size, 1, 1, -1)
     trg_no_look_forward_mask = torch.triu(torch.ones((1, 1, sequence_length, sequence_length), device=device) == 1).transpose(2, 3)
 
     # logic AND operation (both padding mask and no-look-forward must be true to attend to a certain token)

@@ -1,4 +1,16 @@
+# PyCharm IDE
 .idea
 __pycache__
 
+# This is where torch text datasets like IWSLT and WMT14 will be downloaded to
+.data
+
+# Jupyter notebook checkpoints
 .ipynb_checkpoints
+
+# Tensorboard log files
+runs
+
+# Models checkpoints and binaries
+models/checkpoints
+models/binaries

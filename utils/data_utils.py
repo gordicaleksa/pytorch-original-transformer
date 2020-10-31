@@ -9,7 +9,12 @@ from torchtext import datasets
 import spacy
 
 
-from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
+from .constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
+
+
+#
+# Caching mechanism datasets and functions (you don't need this but it makes things a lot faster!
+#
 
 
 class FastTranslationDataset(Dataset):
@@ -72,6 +77,11 @@ def save_cache(cache_path, dataset):
         for ex in dataset.examples:
             cache_file.write(' '.join(ex.src) + '\n')
             cache_file.write(' '.join(ex.trg) + '\n')
+
+
+#
+# End of caching mechanism utilities
+#
 
 
 # todo: add BPE

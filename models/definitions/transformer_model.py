@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 
-from constants import *
+from utils.constants import *
 
 
 # todo: consider sharing the embeddings as in the original paper

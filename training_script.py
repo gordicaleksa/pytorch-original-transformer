@@ -3,7 +3,6 @@
 #  bucketiterator setup) and open-source
 # todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 
-import os
 import argparse
 import time
 
@@ -12,14 +11,13 @@ import torch
 from torch import nn
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
-import matplotlib.pyplot as plt
 
 
-from constants import *
-from data_utils import get_data_loaders, build_masks_and_count_tokens, fetch_src_and_trg_batches
-from optimizers_and_loss_fn import CustomLRAdamOptimizer, LabelSmoothingDistribution
-from transformer_model import Transformer
-import utils as utils
+from utils.optimizers_and_distributions import CustomLRAdamOptimizer, LabelSmoothingDistribution
+from models.definitions.transformer_model import Transformer
+from utils.data_utils import get_data_loaders, build_masks_and_count_tokens, fetch_src_and_trg_batches
+import utils.utils as utils
+from utils.constants import *
 
 
 # todo: after I setup the whole train/val loop step through and make sure that attention mechanism, etc. works as expected
@@ -83,6 +81,8 @@ def train_transformer(training_config):
 
             train_loss_data.append(loss.item())
             num_of_trg_tokens_processed += num_trg_tokens
+
+            # todo: next steps: fix this, paper number of tokens and type of GPU, greedy decoding on checkpoint model
 
             # todo: add BLEU
             if training_config['enable_tensorboard']:

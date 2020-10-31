@@ -15,8 +15,8 @@ BIG_MODEL_DROPOUT_PROB = 0.3
 BIG_MODEL_LABEL_SMOOTHING_VALUE = 0.1
 
 
-CHECKPOINTS_PATH = os.path.join(os.path.dirname(__file__), 'models', 'checkpoints')
-BINARIES_PATH = os.path.join(os.path.dirname(__file__), 'models', 'binaries')
+CHECKPOINTS_PATH = os.path.join(os.path.dirname(__file__), os.pardir, 'models', 'checkpoints')
+BINARIES_PATH = os.path.join(os.path.dirname(__file__), os.pardir, 'models', 'binaries')
 os.makedirs(CHECKPOINTS_PATH, exist_ok=True)
 os.makedirs(BINARIES_PATH, exist_ok=True)
 

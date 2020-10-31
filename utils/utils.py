@@ -5,7 +5,7 @@ import os
 import git
 
 
-from constants import BINARIES_PATH
+from .constants import BINARIES_PATH
 
 
 def get_available_binary_name():

@@ -137,12 +137,10 @@ def build_datasets_and_vocabs():
     return train_dataset, val_dataset, src_field_processor, trg_field_processor
 
 
-# todo: figure out how to set the optimal batch size
-# todo: verify that BucketIterator is really minimizing the number of pad tokens
-# todo: seems like sort_within_batch is a must and using the non-default batch_size_fn (just counts the num of
-#  examples when chunking) is a smart idea
-# todo: bug in pytorch if sort_within_batch is not set to True it's not grouping according to length!?
-# todo: step into code from my torch text version
+# todo: add custom batch_size_fn
+# todo: understand yield a bit better
+# https://github.com/pytorch/text/issues/536#issuecomment-719945594 <- there is a "bug" in BucketIterator i.e. it's
+# description is misleading as it won't group examples of similar length unless you set sort_within_batch to True!
 def get_data_loaders(batch_size, device):
     train_dataset, val_dataset, src_field_processor, trg_field_processor = build_datasets_and_vocabs()
 

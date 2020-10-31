@@ -6,39 +6,64 @@ import torch
 from torchtext.data import Dataset, BucketIterator, Field, Example
 from torchtext.data.utils import interleave_keys
 from torchtext import datasets
-from torchtext.datasets import TranslationDataset
 import spacy
+import numpy as np
 
 
 from constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 
 
 class FastTranslationDataset(Dataset):
+
     @staticmethod
     def sort_key(ex):
         return interleave_keys(len(ex.src), len(ex.trg))
 
-    def __init__(self, path, exts, fields, **kwargs):
+    def __init__(self, cache_path, fields, **kwargs):
 
         # todo: instead of tokenizing every single time cache it and load - see how much faster I get my results
-        examples = []
-        ex = Example()
+        # todo: after I'm done assert that examples == examples from the official dataset (slow approach)
 
-        setattr(ex, 'src', ...)
-        setattr(ex, 'src', ...)
-        examples.append(ex)
+        cached_data = [line.split() for line in open(cache_path, encoding='utf-8')]
+        cached_data_src = cached_data[0::2]
+        cached_data_trg = cached_data[1::2]
+        assert len(cached_data_src) == len(cached_data_trg), f'Source and target data should be of the same length.'
+
+        examples = []
+        for src_tokenized_data, trg_tokenized_data in zip(cached_data_src, cached_data_trg):
+            ex = Example()
+
+            setattr(ex, 'src', src_tokenized_data)
+            setattr(ex, 'trg', trg_tokenized_data)
+
+            examples.append(ex)
 
         # Call the parent class Dataset's constructor
         super().__init__(examples, fields, **kwargs)
 
+
+class DatasetWrapper(FastTranslationDataset):
+
+    @classmethod
+    def get_train_and_val_datasets(cls, train_cache_path, val_cache_path, fields, **kwargs):
+
+        train_dataset = cls(train_cache_path, fields, **kwargs)
+        val_dataset = cls(val_cache_path, fields, **kwargs)
+
+        return train_dataset, val_dataset
+
+
+def save_cache(cache_path, dataset):
+    with open(cache_path, 'w', encoding='utf-8') as train_cache:
+        for ex in dataset.examples:
+            train_cache.write(' '.join(ex.src) + '\n')
+            train_cache.write(' '.join(ex.trg) + '\n')
 
 # todo: add BPE
 # todo: once I process the data once use cache files (https://github.com/bentrevett/pytorch-sentiment-analysis/issues/6)
 # otherwise it's super slow (~60 seconds on my machine)
 # todo: see whether I should use tgt or trg, also pad_idx or pad_token_idx
 def build_datasets_and_vocabs():
-
-
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
 
@@ -50,17 +75,73 @@ def build_datasets_and_vocabs():
 
     SRC = Field(tokenize=tokenize_de, pad_token=PAD_TOKEN, batch_first=True)
     TGT = Field(tokenize=tokenize_en, init_token=BOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN, batch_first=True)
+    fields = [('src', SRC), ('trg', TGT)]
+    filter_pred = lambda x: len(x.src) <= MAX_LEN and len(x.trg) <= MAX_LEN
 
     MAX_LEN = 100
     ts = time.time()
-    # todo: try first with this smaller dataset latter add support for WMT-14 as well
 
+    # Only call once the splits function it is super slow as it constantly has to redo the tokenization
+    root = '.data'
+    train_cache_path = os.path.join(root, 'train_cache.csv')
+    val_cache_path = os.path.join(root, 'val_cache.csv')
+    test_cache_path = os.path.join(root, 'test_cache.csv')
+
+    # if not (os.path.exists(train_cache_path) and os.path.exists(val_cache_path)):
     # it's got a list of examples where example is simply an object that has .src and .trg attributes which
     # contain a tokenized list of strings using the provided tokenizer functions (tokenize_en, tokenize_de).
     # It's that simple. It also internally save self.fields = {'src': SRC, 'trg': TRG} that's it. i.e. we can
     # consider our datasets as 2 columns src and trg each containing fields with tokenized strings
-    train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(exts=('.de', '.en'), fields=[('src', SRC), ('trg', TGT)],
-                                             filter_pred=lambda x: len(x.src) <= MAX_LEN and len(x.trg) <= MAX_LEN)
+    # todo: try first with this smaller dataset latter add support for WMT-14 as well
+    train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(
+        exts=('.de', '.en'),
+        fields=fields,
+        filter_pred=filter_pred
+    )
+
+    # save_cache(train_cache_path, train_dataset)
+    # save_cache(val_cache_path, val_dataset)
+    # save_cache(test_cache_path, test_dataset)
+    # else:
+    train_dataset2, val_dataset2 = DatasetWrapper.get_train_and_val_datasets(train_cache_path, val_cache_path, fields, filter_pred=filter_pred)
+
+    from collections import Counter
+    final = set()
+    for cnt, (ex1, ex2) in enumerate(zip(train_dataset.examples, train_dataset2.examples)):
+        if ex1.src != ex2.src:
+            # print(f'{cnt} Wow {ex1.src} should be the same as {ex2.src}.')
+            c1 = Counter(ex1.src)
+            c2 = Counter(ex2.src)
+            s1 = set(ex1.src)
+            s2 = set(ex2.src)
+            inter = s1.symmetric_difference(s2)
+            real = s2.difference(s1)
+            final.update(inter)
+            if len(c1) == len(c2) + 1:
+                print(inter, real, c1['\xa0'], c1['\xa0 '], c1['\x85'])
+            else:
+                print(f'{cnt} -- {inter} -- len={len(c1)}-{c1} VS len={len(c2)}-{c2}')
+        if ex1.trg != ex2.trg:
+            print('*')
+            # print(f'{cnt} Wow {ex1.trg} should be the same as {ex2.trg}.')
+            c1 = Counter(ex1.trg)
+            c2 = Counter(ex2.trg)
+            s1 = set(ex1.trg)
+            s2 = set(ex2.trg)
+            real = s2.difference(s1)
+            inter = s1.symmetric_difference(s2)
+            final.update(inter)
+            if len(c1) == len(c2) + 1:
+                print(inter, real, c1['\xa0'], c1['\xa0 '], c1['\x85'])
+            else:
+                print(f'{cnt} -- {inter} -- len={len(c1)}-{c1} VS len={len(c2)}-{c2}')
+
+    print(f'Final set of intersections = {final}')
+
+    for ex1, ex2 in zip(val_dataset.examples, val_dataset2.examples):
+        assert ex1.src == ex2.src
+        assert ex1.trg == ex2.trg
+
     print(f'Time it took to load the data: {time.time() - ts:3f} seconds.')
 
     MIN_FREQ = 2
@@ -70,11 +151,11 @@ def build_datasets_and_vocabs():
     SRC.build_vocab(train_dataset.src, min_freq=MIN_FREQ)
     TGT.build_vocab(train_dataset.trg, min_freq=MIN_FREQ)
     print(f'Time it took to build vocabs: {time.time() - ts:3f} seconds.')
-    return train_dataset, val_dataset, test_dataset, SRC, TGT
+    return train_dataset, val_dataset, SRC, TGT
 
 
 def get_data_loaders(batch_size, device):
-    train_dataset, val_dataset, test_dataset, SRC, TGT = build_datasets_and_vocabs()
+    train_dataset, val_dataset, SRC, TGT = build_datasets_and_vocabs()
     # todo: figure out how to set the optimal batch size
     # todo: verify that BucketIterator is really minimizing the number of pad tokens
     # using default sorting function which
@@ -86,6 +167,7 @@ def get_data_loaders(batch_size, device):
     # todo: seems like sort_within_batch is a must and using the non-default batch_size_fn (just counts the num of
     #  examples when chunking) is a smart idea
     # todo: bug in pytorch if sort_within_batch is not set to True it's not grouping according to length!?
+    # todo: step into code from my torch text version
     return train_token_ids_loader, val_token_ids_loader, SRC, TGT
 
 

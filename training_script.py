@@ -40,7 +40,7 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
         device = next(baseline_transformer.parameters()).device
 
         #
-        # Main loop - start of the core part
+        # Main loop - start of the CORE PART
         #
         for batch_idx, token_ids_batch in enumerate(token_ids_loader):
             src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = fetch_src_and_trg_batches(token_ids_batch)
@@ -48,10 +48,10 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
 
             # log because the KL loss expects log probabilities (just an implementation detail)
             predicted_log_distributions = baseline_transformer(src_token_ids_batch, trg_token_ids_batch_input, src_mask, trg_mask)
-            target_distributions = label_smoothing(trg_token_ids_batch_gt)
+            target_distributions = label_smoothing(trg_token_ids_batch_gt)  # these are regular probabilities (not log)
 
             if is_train:
-                custom_lr_optimizer.zero_grad()  # clean the gradients of every trainable weight in the computational graph
+                custom_lr_optimizer.zero_grad()  # clean the trainable weights gradients in the computational graph
 
             loss = kl_div_loss(predicted_log_distributions, target_distributions)
 
@@ -59,13 +59,15 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
                 loss.backward()  # compute the gradients for every trainable weight in the computational graph
                 custom_lr_optimizer.step()  # apply the gradients to weights
 
-            # End of core part
+            # End of CORE PART
 
             #
             # Logging and metrics
             #
+
             # todo: add BLEU
             # todo: gradient clipping for stability?
+
             if is_train:
                 global_train_step += 1
                 num_of_trg_tokens_processed += num_trg_tokens
@@ -75,7 +77,7 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
 
                 if training_config['console_log_freq'] is not None and batch_idx % training_config['console_log_freq'] == 0:
                     print(f'Transformer training: time elapsed= {(time.time() - time_start):.2f} [s] '
-                          f'| epoch={epoch + 1} | batch= [{batch_idx + 1}] '
+                          f'| epoch={epoch + 1} | batch= {batch_idx + 1} '
                           f'| target tokens/batch= {num_of_trg_tokens_processed / training_config["console_log_freq"]}')
 
                     num_of_trg_tokens_processed = 0
@@ -97,18 +99,19 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
 def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
-    # Step 1: Prepare data loaders and data-related information
+    # Step 1: Prepare data loaders
     train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['dataset_path'], training_config['batch_size'], device)
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
 
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]
+    src_vocab_size = len(src_field_processor)
     trg_vocab_size = len(trg_field_processor.vocab)
 
-    # Step 2: Prepare the model (transformer)
+    # Step 2: Prepare the model (original transformer)
     baseline_transformer = Transformer(
         model_dimension=BASELINE_MODEL_DIMENSION,
-        src_vocab_size=len(src_field_processor.vocab),
-        trg_vocab_size=len(trg_field_processor.vocab),
+        src_vocab_size=src_vocab_size,
+        trg_vocab_size=trg_vocab_size,
         number_of_heads=BASELINE_MODEL_NUMBER_OF_HEADS,
         number_of_layers=BASELINE_MODEL_NUMBER_OF_LAYERS,
         dropout_probability=BASELINE_MODEL_DROPOUT_PROB
@@ -137,7 +140,7 @@ def train_transformer(training_config):
         with torch.no_grad():
             train_val_loop(is_train=False, token_ids_loader=val_token_ids_loader, epoch=epoch)
 
-    # Save the latest generator in the binaries directory
+    # Save the latest transformer in the binaries directory
     torch.save(utils.get_training_state(training_config, baseline_transformer), os.path.join(BINARIES_PATH, utils.get_available_binary_name()))
 
 

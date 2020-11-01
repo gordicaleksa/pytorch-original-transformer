@@ -6,7 +6,7 @@ import numpy as np
 
 
 from models.definitions.transformer_model import PositionalEncoding
-from utils.optimizers_and_loss_fn import CustomLRAdamOptimizer, LabelSmoothingDistribution, OneHotDistribution
+from utils.optimizers_and_distributions import CustomLRAdamOptimizer, LabelSmoothingDistribution, OneHotDistribution
 
 
 def display(imgs_to_display):

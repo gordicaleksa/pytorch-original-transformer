@@ -163,10 +163,10 @@ class DecoderLayer(nn.Module):
         # as input - this way we have a uniform interface for the sublayer logic.
         srb = src_representations_batch
         decoder_trg_self_attention = lambda trb: self.trg_multi_headed_attention(query=trb, key=trb, value=trb, mask=trg_mask)
-        decoder_src_self_attention = lambda trb: self.src_multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
+        decoder_src_attention = lambda trb: self.src_multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
 
         trg_representations_batch = self.sublayers[0](trg_representations_batch, decoder_trg_self_attention)
-        trg_representations_batch = self.sublayers[1](trg_representations_batch, decoder_src_self_attention)
+        trg_representations_batch = self.sublayers[1](trg_representations_batch, decoder_src_attention)
         trg_representations_batch = self.sublayers[2](trg_representations_batch, self.pointwise_net)
 
         return trg_representations_batch
@@ -293,26 +293,29 @@ class MultiHeadedAttention(nn.Module):
         attention_weights = self.attention_dropout(attention_weights)
 
         # Step 5: based on attention weights calculate new token representations
+        # attention_weights shape = (B, NH, S, S), value shape = (B, NH, S, HD) 
         intermediate_token_representations = torch.matmul(attention_weights, value)
 
         # todo: visualize attention
         return intermediate_token_representations, attention_weights  # pass attention weights for visualization purposes
 
     def forward(self, query, key, value, mask):
-        # Step 1: linearly project
-        # todo: verify q/k/v are contiguous, try directly reshaping into PyTorch's optimal shape
         batch_size = query.shape[0]
+
+        # todo: verify q/k/v are contiguous, try directly reshaping into PyTorch's optimal shape
+        # Step 1: Input linear projection
+        # Shape before: (B, S, NH*HD) and after this line: (B, NH, S, HD)
+        # where B - batch size, NH - number of heads, S - max token sequence length, HD - head dimension
         query, key, value = [net(x).view(batch_size, -1, self.number_of_heads, self.head_dimension).transpose(1, 2)
                              for net, x in zip(self.qkv_nets, (query, key, value))]
 
         # Step 2: Apply attention
         intermediate_token_representations, self.attention_weights = self.attention(query, key, value, mask)
 
-        # Step 3: reshape from (B, NH, S, HD) over (B, S, NH, HD) (via transpose) into (B, S, NHxHD)
-        # where B - batch size, S - max sequence length, NH - number of heads, HD - head dimension
+        # Step 3: Reshape from (B, NH, S, HD) over (B, S, NH, HD) (via transpose) into (B, S, NHxHD)
         reshaped = intermediate_token_representations.transpose(1, 2).reshape(batch_size, -1, self.number_of_heads * self.head_dimension)
 
-        # Step 4: Linear projection
+        # Step 4: Output linear projection
         token_representations = self.out_projection_net(reshaped)
 
         return token_representations

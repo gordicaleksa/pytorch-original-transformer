@@ -87,8 +87,8 @@ def save_cache(cache_path, dataset):
 # todo: add BPE
 # todo: try first with this smaller dataset latter add support for WMT-14 as well
 def build_datasets_and_vocabs(dataset_path, use_caching_mechanism=True):
-    spacy_de = spacy.load('de')
-    spacy_en = spacy.load('en')
+    spacy_de = spacy.load('de_core_news_sm')
+    spacy_en = spacy.load('en_core_web_sm')
 
     def tokenize_de(text):
         return [tok.text for tok in spacy_de.tokenizer(text)]

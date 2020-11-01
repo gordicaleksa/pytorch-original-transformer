@@ -12,5 +12,7 @@ dependencies:
     - GitPython==3.1.2
     - jupyter==1.0.0
     - numpy==1.18.4
-    - spacy==2.3.2
     - tensorboard==2.2.2
+    - spacy==2.3.2
+    - https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.3.1/en_core_web_sm-2.3.1.tar.gz#egg=en_core_web_sm
+    - https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-2.3.0/de_core_news_sm-2.3.0.tar.gz#egg=de_core_news_sm

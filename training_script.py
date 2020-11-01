@@ -82,6 +82,7 @@ def train_transformer(training_config):
             #
 
             # todo: add BLEU
+            # todo: gradient clipping for stability?
             train_loss_data.append(loss.item())
             num_of_trg_tokens_processed += num_trg_tokens
             global_train_step += 1

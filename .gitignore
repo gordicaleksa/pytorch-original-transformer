@@ -19,4 +19,5 @@ models/binaries
 .azureml
 submit_to_aml.py
 environment_aml.yml
+training_script_aml.py
 pytorch-original-transformer

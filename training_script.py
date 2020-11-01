@@ -2,6 +2,7 @@
 # todo: write README (add attention visualization to README, plot signal tokens vs pad tokens for different
 #  bucketiterator setup) and open-source
 # todo: create this in a similar fashion to GANs repo, things I've modified, etc.
+# todo: fix the integer division warning
 
 import argparse
 import time
@@ -26,7 +27,7 @@ def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare data loaders and data-related information
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['batch_size'], device)
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['dataset_path'], training_config['batch_size'], device)
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
 
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]
@@ -142,6 +143,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=5)
     parser.add_argument("--batch_size", type=int, help="target number of tokens in a src/trg batch", default=1500)
+    parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
 
     # logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging", default=True)

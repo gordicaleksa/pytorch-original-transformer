@@ -293,7 +293,7 @@ class MultiHeadedAttention(nn.Module):
         attention_weights = self.attention_dropout(attention_weights)
 
         # Step 5: based on attention weights calculate new token representations
-        # attention_weights shape = (B, NH, S, S), value shape = (B, NH, S, HD) 
+        # attention_weights shape = (B, NH, S, S), value shape = (B, NH, S, HD)
         intermediate_token_representations = torch.matmul(attention_weights, value)
 
         # todo: visualize attention

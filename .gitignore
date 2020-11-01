@@ -14,3 +14,9 @@ runs
 # Models checkpoints and binaries
 models/checkpoints
 models/binaries
+
+# Azure ML related
+.azureml
+submit_to_aml.py
+environment_aml.yml
+pytorch-original-transformer

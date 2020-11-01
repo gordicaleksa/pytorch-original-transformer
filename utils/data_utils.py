@@ -86,7 +86,7 @@ def save_cache(cache_path, dataset):
 
 # todo: add BPE
 # todo: try first with this smaller dataset latter add support for WMT-14 as well
-def build_datasets_and_vocabs(use_caching_mechanism=True):
+def build_datasets_and_vocabs(dataset_path, use_caching_mechanism=True):
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
 
@@ -106,10 +106,9 @@ def build_datasets_and_vocabs(use_caching_mechanism=True):
     filter_pred = lambda x: len(x.src) <= MAX_LEN and len(x.trg) <= MAX_LEN
 
     # Only call once the splits function it is super slow as it constantly has to redo the tokenization
-    root = os.path.join(os.path.dirname(__file__), os.pardir, '.data')
-    train_cache_path = os.path.join(root, 'train_cache.csv')
-    val_cache_path = os.path.join(root, 'val_cache.csv')
-    test_cache_path = os.path.join(root, 'test_cache.csv')
+    train_cache_path = os.path.join(dataset_path, 'train_cache.csv')
+    val_cache_path = os.path.join(dataset_path, 'val_cache.csv')
+    test_cache_path = os.path.join(dataset_path, 'test_cache.csv')
 
     # This simple caching mechanism gave me ~30x speedup on my machine! From ~70s -> ~2.5s!
     ts = time.time()
@@ -121,7 +120,7 @@ def build_datasets_and_vocabs(use_caching_mechanism=True):
         train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(
             exts=('.de', '.en'),
             fields=fields,
-            root=root,
+            root=dataset_path,
             filter_pred=filter_pred
         )
 
@@ -189,8 +188,8 @@ def batch_size_fn(new_example, count, sofar):
 
 # https://github.com/pytorch/text/issues/536#issuecomment-719945594 <- there is a "bug" in BucketIterator i.e. it's
 # description is misleading as it won't group examples of similar length unless you set sort_within_batch to True!
-def get_data_loaders(batch_size, device):
-    train_dataset, val_dataset, src_field_processor, trg_field_processor = build_datasets_and_vocabs()
+def get_data_loaders(dataset_path, batch_size, device):
+    train_dataset, val_dataset, src_field_processor, trg_field_processor = build_datasets_and_vocabs(dataset_path)
 
     # using default sorting function which
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
@@ -277,10 +276,12 @@ def sample_text_from_loader(src_field_processor, trg_field_processor, token_ids_
             print()
 
 
+# todo: enable running this from this file directly ImportError: attempted relative import with no known parent package
 if __name__ == "__main__":
     batch_size = 8
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(batch_size, device)
+    dataset_path = os.path.join(os.path.dirname(__file__), os.pardir, '.data')
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, batch_size, device)
 
     # Verify that the mask logic is correct
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]

@@ -14,7 +14,7 @@ def translate_a_single_sentence(translation_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare the field processor (tokenizer, numericalizer)
-    _, _, src_field_processor, trg_field_processor = build_datasets_and_vocabs(use_caching_mechanism=True)
+    _, _, src_field_processor, trg_field_processor = build_datasets_and_vocabs(translation_config['dataset_path'])
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # needed for constructing masks
 
@@ -43,8 +43,8 @@ def translate_a_single_sentence(translation_config):
     english_sentence_tokens = [BOS_TOKEN]  # initial prompt - beginning/start of the sentence token
     trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in english_sentence_tokens]], device=device)
 
-    # This could be further optimized to cache old token activations because they can't look ahead and so adding a newly
-    # predicted token won't change old token's activations.
+    # Decoding could be further optimized to cache old token activations because they can't look ahead and so
+    # adding a newly predicted token won't change old token's activations.
     #
     # Example: we input <s> and do a forward pass. We get intermediate activations for <s> and at the output at position
     # 0, after the doing linear layer we get e.g. token <I>. Now we input <s>,<I> but <s>'s activations will remain
@@ -56,9 +56,11 @@ def translate_a_single_sentence(translation_config):
             predicted_log_distributions = baseline_transformer(src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask)
 
             # todo: add beam decoding mechanism
+            # todo: optimize: don't run the whole model run the encoding part only once
             # Greedy decoding
             most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
             predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
+            print(predicted_word)
 
             if predicted_word == EOS_TOKEN:
                 english_sentence_tokens.append(EOS_TOKEN)
@@ -77,6 +79,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--german_sentence", type=str, help="German sentence to translate into English", default="Ich bin.")
     parser.add_argument("--model_name", type=str, help="Transformer model name", default=r'transformer_ckpt_epoch_1.pth')
+    parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
     args = parser.parse_args()
 
     # Wrapping training configuration into a dictionary

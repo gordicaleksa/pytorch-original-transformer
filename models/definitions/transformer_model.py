@@ -50,7 +50,7 @@ class Transformer(nn.Module):
 
     def init_params(self):
         # todo: potentially add special initialization (not mentioned in the paper though, checkout tensor2tensor lib)
-        print('dummy')
+        print('Using default PyTorch initialization.')
 
     def forward(self, src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask):
         # todo: comment everything once I finished the initial design

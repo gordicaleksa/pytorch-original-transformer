@@ -106,7 +106,7 @@ def build_datasets_and_vocabs(use_caching_mechanism=True):
     filter_pred = lambda x: len(x.src) <= MAX_LEN and len(x.trg) <= MAX_LEN
 
     # Only call once the splits function it is super slow as it constantly has to redo the tokenization
-    root = '.data'
+    root = os.path.join(os.path.dirname(__file__), os.pardir, '.data')
     train_cache_path = os.path.join(root, 'train_cache.csv')
     val_cache_path = os.path.join(root, 'val_cache.csv')
     test_cache_path = os.path.join(root, 'test_cache.csv')
@@ -121,6 +121,7 @@ def build_datasets_and_vocabs(use_caching_mechanism=True):
         train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(
             exts=('.de', '.en'),
             fields=fields,
+            root=root,
             filter_pred=filter_pred
         )
 

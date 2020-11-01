@@ -1,5 +1,3 @@
-# todo: add greedy and beam decoding mechanisms and use the pretrained models to translate
-
 import argparse
 
 
@@ -8,21 +6,19 @@ from torchtext.data import Example
 
 
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import build_datasets_and_vocabs
+from utils.data_utils import build_datasets_and_vocabs, build_masks_and_count_tokens
 from utils.constants import *
 
 
-def greedy_decode(model, sentence):
-    print('todo')
-
-
-def translate(translation_config):
+def translate_a_single_sentence(translation_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
-    # todo: redesign so that I can import only things I need
+    # Step 1: Prepare the field processor (tokenizer, numericalizer)
     _, _, src_field_processor, trg_field_processor = build_datasets_and_vocabs(use_caching_mechanism=True)
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
+    pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # needed for constructing masks
 
+    # Step 2: Prepare the model
     baseline_transformer = Transformer(
         model_dimension=BASELINE_MODEL_DIMENSION,
         src_vocab_size=len(src_field_processor.vocab),
@@ -39,11 +35,39 @@ def translate(translation_config):
     baseline_transformer.load_state_dict(model_state["state_dict"], strict=True)
     baseline_transformer.eval()
 
+    # Step 3: Prepare the input sentence and output prompt
     german_sentence = translation_config['german_sentence']
-    data = [Example.fromlist([german_sentence], fields=('src', src_field_processor))]
-    batch = [getattr(x, 'src') for x in data]
+    ex = Example.fromlist([german_sentence], fields=[('src', src_field_processor)])  # tokenize the sentence
+    src_token_ids_batch = src_field_processor.process([ex.src], device)  # numericalize and convert to cuda tensor
 
-    src_field_processor.process(batch, device)
+    english_sentence_tokens = [BOS_TOKEN]  # initial prompt - beginning/start of the sentence token
+    trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in english_sentence_tokens]], device=device)
+
+    # This could be further optimized to cache old token activations because they can't look ahead and so adding a newly
+    # predicted token won't change old token's activations.
+    #
+    # Example: we input <s> and do a forward pass. We get intermediate activations for <s> and at the output at position
+    # 0, after the doing linear layer we get e.g. token <I>. Now we input <s>,<I> but <s>'s activations will remain
+    # the same. Similarly say we now got <am> at output position 1, in the next step we input <s>,<I>,<am> and so <I>'s
+    # activations will remain the same as it only looks at/attends to itself and to <s> and so forth.
+    with torch.no_grad():
+        while True:
+            src_mask, trg_mask, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
+            predicted_log_distributions = baseline_transformer(src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask)
+
+            # todo: add beam decoding mechanism
+            # Greedy decoding
+            most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
+            predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
+
+            if predicted_word == EOS_TOKEN:
+                english_sentence_tokens.append(EOS_TOKEN)
+                break
+
+            english_sentence_tokens.append(predicted_word)
+            trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in english_sentence_tokens]], device=device)
+
+    print(f'translation = {english_sentence_tokens}')
 
 
 if __name__ == "__main__":
@@ -60,5 +84,5 @@ if __name__ == "__main__":
     for arg in vars(args):
         translation_config[arg] = getattr(args, arg)
 
-    # translate the given german sentence
-    translate(translation_config)
+    # Translate the given german sentence
+    translate_a_single_sentence(translation_config)

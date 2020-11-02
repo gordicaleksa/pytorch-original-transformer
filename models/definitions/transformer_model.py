@@ -103,7 +103,7 @@ class Encoder(nn.Module):
             # src_mask's role is to mask/ignore padded token representations in the multi-headed self-attention module
             src_representations_batch = encoder_layer(src_representations_batch, src_mask)
 
-        # not mentioned explicitly in the paper
+        # Not mentioned explicitly in the paper
         return self.norm(src_representations_batch)
 
 
@@ -188,6 +188,19 @@ class DecoderLayer(nn.Module):
 #
 
 
+# Note: the original paper had LayerNorm AFTER the residual connection and addition operation
+# multiple experiments I found showed that it's more effective to do it BEFORE
+class SublayerLogic(nn.Module):
+    def __init__(self, model_dimension, dropout_probability):
+        super().__init__()
+        self.norm = nn.LayerNorm(model_dimension)
+        self.dropout = nn.Dropout(p=dropout_probability)
+
+    def forward(self, representations_batch, sublayer_module):
+        # Page 7, Chapter 5.4 "Regularization"
+        return representations_batch + self.dropout(sublayer_module(self.norm(representations_batch)))
+
+
 class DecoderGenerator(nn.Module):
     def __init__(self, model_dimension, vocab_size):
         super().__init__()
@@ -200,19 +213,6 @@ class DecoderGenerator(nn.Module):
 
     def forward(self, trg_representations_batch):
         return self.log_softmax(self.linear(trg_representations_batch))
-
-
-# Note: the original paper had LayerNorm AFTER the residual connection and addition operation
-# multiple experiments I found showed that it's more effective to do it BEFORE
-class SublayerLogic(nn.Module):
-    def __init__(self, model_dimension, dropout_probability):
-        super().__init__()
-        self.norm = nn.LayerNorm(model_dimension)
-        self.dropout = nn.Dropout(p=dropout_probability)
-
-    def forward(self, representations_batch, sublayer_module):
-        # Page 7, Chapter 5.4 "Regularization"
-        return representations_batch + self.dropout(sublayer_module(self.norm(representations_batch)))
 
 
 class PositionwiseFeedForwardNet(nn.Module):
@@ -307,7 +307,6 @@ class MultiHeadedAttention(nn.Module):
         # attention_weights shape = (B, NH, S, S), value shape = (B, NH, S, HD)
         intermediate_token_representations = torch.matmul(attention_weights, value)
 
-        # todo: visualize attention
         return intermediate_token_representations, attention_weights  # pass attention weights for visualization purposes
 
     def forward(self, query, key, value, mask):

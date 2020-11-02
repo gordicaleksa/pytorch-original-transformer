@@ -203,13 +203,20 @@ def get_data_loaders(dataset_path, batch_size, device):
     return train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor
 
 
-def build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device):
+def build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id):
     batch_size = src_token_ids_batch.shape[0]
 
     # src_mask shape = (B, 1, 1, S) check out attention function in transformer_model.py where masks are applied
     # src_mask only masks pad tokens as we want to ignore their representations (no information in there...)
     src_mask = (src_token_ids_batch != pad_token_id).view(batch_size, 1, 1, -1)
     num_src_tokens = torch.sum(src_mask.long())
+
+    return src_mask, num_src_tokens
+
+
+def build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id):
+    batch_size = trg_token_ids_batch.shape[0]
+    device = trg_token_ids_batch.device
 
     # Same as src_mask but we additionally want to mask tokens from looking forward into the future tokens
     # Note: wherever the mask value is true we want to attend to that token, otherwise we mask (ignore) it.
@@ -220,6 +227,13 @@ def build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_t
     # logic AND operation (both padding mask and no-look-forward must be true to attend to a certain target token)
     trg_mask = trg_padding_mask & trg_no_look_forward_mask
     num_trg_tokens = torch.sum(trg_padding_mask.long())
+
+    return trg_mask, num_trg_tokens
+
+
+def build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device):
+    src_mask, num_src_tokens = build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
+    trg_mask, num_trg_tokens = build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
 
     return src_mask, trg_mask, num_src_tokens, num_trg_tokens
 

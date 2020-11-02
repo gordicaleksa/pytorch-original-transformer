@@ -3,76 +3,42 @@ import argparse
 
 import torch
 from torchtext.data import Example
-import matplotlib.pyplot as plt
-import seaborn
 
 
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import build_datasets_and_vocabs, build_masks_and_count_tokens
+from utils.data_utils import build_datasets_and_vocabs, build_masks_and_count_tokens_src, build_masks_and_count_tokens_trg
 from utils.constants import *
+from utils.visualization_utils import visualize_attention
 
 
-def plot_attention_heatmap(data, x, y, head_id, ax):
-    seaborn.heatmap(data, xticklabels=x, yticklabels=y, square=True, vmin=0.0, vmax=1.0, cbar=False, annot=True,
-                    fmt=".2f", ax=ax)
-    ax.set_title(f'MHA head id = {head_id}')
+# todo: add beam decoding mechanism
+def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor, max_target_tokens=60):
+    device = next(baseline_transformer.parameters()).device
+    pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
+
+    target_sentence_tokens = [BOS_TOKEN]  # initial prompt - beginning/start of the sentence token
+    trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
+
+    while True:
+        trg_mask, _ = build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
+        predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
+
+        # This is the greedy decoding part - we find the index of the target token with highest probability
+        most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
+        # Find the target token associated with this index
+        predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
+
+        target_sentence_tokens.append(predicted_word)
+        if predicted_word == EOS_TOKEN or len(target_sentence_tokens) == max_target_tokens:
+            break
+
+        # Prepare the input for the next iteration
+        trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
+
+    return target_sentence_tokens
 
 
-def visualize_attention_helper(attention_weights, source_sentence_tokens=None, target_sentence_tokens=None, title=''):
-    num_columns = 4
-    num_rows = 2
-    fig, axs = plt.subplots(num_rows, num_columns, figsize=(20, 10))  # prepare the figure and axes
-
-    assert source_sentence_tokens is not None or target_sentence_tokens is not None, \
-        f'Either source or target sentence must be passed in.'
-
-    target_sentence_tokens = source_sentence_tokens if target_sentence_tokens is None else target_sentence_tokens
-    source_sentence_tokens = target_sentence_tokens if source_sentence_tokens is None else source_sentence_tokens
-
-    for head_id, head_attention_weights in enumerate(attention_weights):
-        row_index = int(head_id / num_columns)
-        column_index = head_id % num_columns
-        plot_attention_heatmap(head_attention_weights, source_sentence_tokens, target_sentence_tokens if head_id % num_columns == 0 else [], head_id, axs[row_index, column_index])
-
-    fig.suptitle(title)
-    plt.show()
-
-
-def visualize_attention(baseline_transformer, source_sentence_tokens, target_sentence_tokens):
-    encoder = baseline_transformer.encoder
-    decoder = baseline_transformer.decoder
-
-    # Remove the end of sentence token </s> as we never attend to it, it's produced at the output and we stop
-    target_sentence_tokens = target_sentence_tokens[:-1]
-
-    # Visualize encoder attention weights
-    for layer_id, encoder_layer in enumerate(encoder.encoder_layers):
-        mha = encoder_layer.multi_headed_attention  # Every encoder layer has 1 MHA module
-
-        # attention_weights shape = (B, NH, S, S), extract 0th batch and loop over NH (number of heads) MHA heads
-        # S stands for maximum source token-sequence length
-        attention_weights = mha.attention_weights.cpu().numpy()[0]
-
-        title = f'Encoder layer {layer_id + 1}'
-        visualize_attention_helper(attention_weights, source_sentence_tokens, title=title)
-
-    # Visualize decoder attention weights
-    for layer_id, decoder_layer in enumerate(decoder.decoder_layers):
-        mha_trg = decoder_layer.trg_multi_headed_attention  # Extract the self-attention MHA
-        mha_src = decoder_layer.src_multi_headed_attention  # Extract the source attending MHA
-
-        # attention_weights shape = (B, NH, T, T), T stands for maximum target token-sequence length
-        attention_weights_trg = mha_trg.attention_weights.cpu().numpy()[0]
-        # shape = (B, NH, T, S), target token representations create queries and keys/values come from the encoder
-        attention_weights_src = mha_src.attention_weights.cpu().numpy()[0]
-
-        title = f'Decoder layer {layer_id + 1}, self-attention MHA'
-        visualize_attention_helper(attention_weights_trg, target_sentence_tokens=target_sentence_tokens, title=title)
-
-        title = f'Decoder layer {layer_id + 1}, source-attending MHA'
-        visualize_attention_helper(attention_weights_src, source_sentence_tokens, target_sentence_tokens, title)
-
-
+# Super easy to add translation for a batch of sentences passed as a .txt file for example
 def translate_a_single_sentence(translation_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
@@ -98,7 +64,7 @@ def translate_a_single_sentence(translation_config):
     baseline_transformer.load_state_dict(model_state["state_dict"], strict=True)
     baseline_transformer.eval()
 
-    # Step 3: Prepare the input sentence and output prompt
+    # Step 3: Prepare the input sentence
     source_sentence = translation_config['german_sentence']
     ex = Example.fromlist([source_sentence], fields=[('src', src_field_processor)])  # tokenize the sentence
 
@@ -107,9 +73,6 @@ def translate_a_single_sentence(translation_config):
 
     # Numericalize and convert to cuda tensor
     src_token_ids_batch = src_field_processor.process([source_sentence_tokens], device)
-
-    target_sentence_tokens = [BOS_TOKEN]  # initial prompt - beginning/start of the sentence token
-    trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
 
     # Decoding could be further optimized to cache old token activations because they can't look ahead and so
     # adding a newly predicted token won't change old token's activations.
@@ -121,26 +84,11 @@ def translate_a_single_sentence(translation_config):
 
     with torch.no_grad():
         # Step 4: Optimization - compute the source token representations only once
-        src_mask, _, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
+        src_mask, _ = build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
         src_representations_batch = baseline_transformer.encode(src_token_ids_batch, src_mask)
 
         # Step 5: Decoding process
-        while True:
-            _, trg_mask, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
-            predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
-
-            # todo: add beam decoding mechanism
-            # Greedy decoding
-            most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
-            predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
-
-            if predicted_word == EOS_TOKEN:
-                target_sentence_tokens.append(EOS_TOKEN)
-                break
-
-            target_sentence_tokens.append(predicted_word)
-            trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
-
+        target_sentence_tokens = greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor)
         print(f'Translation | Target sentence tokens = {target_sentence_tokens}')
 
         # Step 6: Potentially visualize the encoder/decoder attention weights

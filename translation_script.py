@@ -12,19 +12,65 @@ from utils.data_utils import build_datasets_and_vocabs, build_masks_and_count_to
 from utils.constants import *
 
 
-def visualize_encoder_attention(encoder, src_sentence):
-    def draw(data, x, y, cbar, ax):
-        seaborn.heatmap(data, xticklabels=x, yticklabels=y, square=True, vmin=0.0, vmax=1.0, cbar=cbar, ax=ax)
+def plot_attention_heatmap(data, x, y, head_id, ax):
+    seaborn.heatmap(data, xticklabels=x, yticklabels=y, square=True, vmin=0.0, vmax=1.0, cbar=False, annot=True,
+                    fmt=".2f", ax=ax)
+    ax.set_title(f'MHA head id = {head_id}')
 
-    for encoder_layer in encoder.encoder_layers:
-        fig, axs = plt.subplots(1, 8, figsize=(15, 5))
 
-        mha = encoder_layer.multi_headed_attention
+def visualize_attention_helper(attention_weights, source_sentence_tokens=None, target_sentence_tokens=None, title=''):
+    num_columns = 4
+    num_rows = 2
+    fig, axs = plt.subplots(num_rows, num_columns, figsize=(20, 10))  # prepare the figure and axes
+
+    assert source_sentence_tokens is not None or target_sentence_tokens is not None, \
+        f'Either source or target sentence must be passed in.'
+
+    target_sentence_tokens = source_sentence_tokens if target_sentence_tokens is None else target_sentence_tokens
+    source_sentence_tokens = target_sentence_tokens if source_sentence_tokens is None else source_sentence_tokens
+
+    for head_id, head_attention_weights in enumerate(attention_weights):
+        row_index = int(head_id / num_columns)
+        column_index = head_id % num_columns
+        plot_attention_heatmap(head_attention_weights, source_sentence_tokens, target_sentence_tokens if head_id % num_columns == 0 else [], head_id, axs[row_index, column_index])
+
+    fig.suptitle(title)
+    plt.show()
+
+
+def visualize_attention(baseline_transformer, source_sentence_tokens, target_sentence_tokens):
+    encoder = baseline_transformer.encoder
+    decoder = baseline_transformer.decoder
+
+    # Remove the end of sentence token </s> as we never attend to it, it's produced at the output and we stop
+    target_sentence_tokens = target_sentence_tokens[:-1]
+
+    # Visualize encoder attention weights
+    for layer_id, encoder_layer in enumerate(encoder.encoder_layers):
+        mha = encoder_layer.multi_headed_attention  # Every encoder layer has 1 MHA module
+
+        # attention_weights shape = (B, NH, S, S), extract 0th batch and loop over NH (number of heads) MHA heads
+        # S stands for maximum source token-sequence length
         attention_weights = mha.attention_weights.cpu().numpy()[0]
-        for head_id, attention_head_weights in enumerate(attention_weights):
-            draw(attention_head_weights, src_sentence, src_sentence if head_id == 0 else [], head_id == len(attention_weights) - 1, axs[head_id])
 
-        plt.show()
+        title = f'Encoder layer {layer_id + 1}'
+        visualize_attention_helper(attention_weights, source_sentence_tokens, title=title)
+
+    # Visualize decoder attention weights
+    for layer_id, decoder_layer in enumerate(decoder.decoder_layers):
+        mha_trg = decoder_layer.trg_multi_headed_attention  # Extract the self-attention MHA
+        mha_src = decoder_layer.src_multi_headed_attention  # Extract the source attending MHA
+
+        # attention_weights shape = (B, NH, T, T), T stands for maximum target token-sequence length
+        attention_weights_trg = mha_trg.attention_weights.cpu().numpy()[0]
+        # shape = (B, NH, T, S), target token representations create queries and keys/values come from the encoder
+        attention_weights_src = mha_src.attention_weights.cpu().numpy()[0]
+
+        title = f'Decoder layer {layer_id + 1}, self-attention MHA'
+        visualize_attention_helper(attention_weights_trg, target_sentence_tokens=target_sentence_tokens, title=title)
+
+        title = f'Decoder layer {layer_id + 1}, source-attending MHA'
+        visualize_attention_helper(attention_weights_src, source_sentence_tokens, target_sentence_tokens, title)
 
 
 def translate_a_single_sentence(translation_config):
@@ -78,9 +124,6 @@ def translate_a_single_sentence(translation_config):
         src_mask, _, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
         src_representations_batch = baseline_transformer.encode(src_token_ids_batch, src_mask)
 
-        if translation_config['visualize_attention']:
-            visualize_encoder_attention(baseline_transformer.encoder, source_sentence_tokens)
-
         # Step 5: Decoding process
         while True:
             _, trg_mask, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
@@ -90,7 +133,6 @@ def translate_a_single_sentence(translation_config):
             # Greedy decoding
             most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
             predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
-            print(predicted_word)
 
             if predicted_word == EOS_TOKEN:
                 target_sentence_tokens.append(EOS_TOKEN)
@@ -99,7 +141,11 @@ def translate_a_single_sentence(translation_config):
             target_sentence_tokens.append(predicted_word)
             trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
 
-        print(f'Target sentence tokens = {target_sentence_tokens}')
+        print(f'Translation | Target sentence tokens = {target_sentence_tokens}')
+
+        # Step 6: Potentially visualize the encoder/decoder attention weights
+        if translation_config['visualize_attention']:
+            visualize_attention(baseline_transformer, source_sentence_tokens, target_sentence_tokens)
 
 
 if __name__ == "__main__":
@@ -107,7 +153,7 @@ if __name__ == "__main__":
     # modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
     #
     parser = argparse.ArgumentParser()
-    parser.add_argument("--german_sentence", type=str, help="German sentence to translate into English", default="Ich bin ein Mensch.")
+    parser.add_argument("--german_sentence", type=str, help="German sentence to translate into English", default="Ich bin ein guter Mensch, denke ich.")
     parser.add_argument("--model_name", type=str, help="transformer model name", default=r'transformer_000000.pth')
     parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
 

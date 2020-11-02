@@ -1,4 +1,5 @@
 import argparse
+import time
 
 
 import torch
@@ -28,7 +29,7 @@ def translate_a_single_sentence(translation_config):
         dropout_probability=BASELINE_MODEL_DROPOUT_PROB
     ).to(device)
 
-    model_path = os.path.join(CHECKPOINTS_PATH, translation_config['model_name'])
+    model_path = os.path.join(BINARIES_PATH, translation_config['model_name'])
     assert os.path.exists(model_path), f'Could not find the model {model_path}. You first need to train the transformer.'
 
     model_state = torch.load(model_path)
@@ -50,13 +51,18 @@ def translate_a_single_sentence(translation_config):
     # 0, after the doing linear layer we get e.g. token <I>. Now we input <s>,<I> but <s>'s activations will remain
     # the same. Similarly say we now got <am> at output position 1, in the next step we input <s>,<I>,<am> and so <I>'s
     # activations will remain the same as it only looks at/attends to itself and to <s> and so forth.
+    ts = time.time()
+
+    # Optimization - compute the source token representations only once
+    src_mask, _, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
+    src_representations_batch = baseline_transformer.encode(src_token_ids_batch, src_mask)
+
     with torch.no_grad():
         while True:
-            src_mask, trg_mask, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
-            predicted_log_distributions = baseline_transformer(src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask)
+            _, trg_mask, _, _ = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device)
+            predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
 
             # todo: add beam decoding mechanism
-            # todo: optimize: don't run the whole model run the encoding part only once
             # Greedy decoding
             most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
             predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
@@ -69,6 +75,7 @@ def translate_a_single_sentence(translation_config):
             english_sentence_tokens.append(predicted_word)
             trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in english_sentence_tokens]], device=device)
 
+    print(f'time elapsed= {(time.time() - ts):.2f} [s]')
     print(f'translation = {english_sentence_tokens}')
 
 
@@ -77,8 +84,8 @@ if __name__ == "__main__":
     # modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
     #
     parser = argparse.ArgumentParser()
-    parser.add_argument("--german_sentence", type=str, help="German sentence to translate into English", default="Ich bin.")
-    parser.add_argument("--model_name", type=str, help="Transformer model name", default=r'transformer_ckpt_epoch_1.pth')
+    parser.add_argument("--german_sentence", type=str, help="German sentence to translate into English", default="I hatte gerne damals mit dir geredet")
+    parser.add_argument("--model_name", type=str, help="Transformer model name", default=r'transformer_000000.pth')
     parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
     args = parser.parse_args()
 

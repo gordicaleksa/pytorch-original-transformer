@@ -24,7 +24,6 @@ from utils.constants import *
 
 
 # todo: consider sharing the embeddings as in the original paper
-# todo: after I get the training up and running verify that this design is the best one
 class Transformer(nn.Module):
 
     def __init__(self, model_dimension, src_vocab_size, trg_vocab_size, number_of_heads, number_of_layers, dropout_probability):
@@ -53,16 +52,27 @@ class Transformer(nn.Module):
         print('Using default PyTorch initialization.')
 
     def forward(self, src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask):
-        # todo: comment everything once I finished the initial design
-        src_embeddings_batch = self.src_embedding(src_token_ids_batch)  # get embedding vectors for token ids
+        src_representations_batch = self.encode(src_token_ids_batch, src_mask)
+        trg_log_probs = self.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
+        return trg_log_probs
+
+    # Utility functions for optimizing the decoding/translation process (see translation.py)
+    def encode(self, src_token_ids_batch, src_mask):
+        src_embeddings_batch = self.src_embedding(src_token_ids_batch)  # get embedding vectors for src token ids
         src_embeddings_batch = self.src_pos_embedding(src_embeddings_batch)  # add positional embedding
+        # forward pass through the encoder stack
         src_representations_batch = self.encoder(src_embeddings_batch, src_mask)
 
-        trg_embeddings_batch = self.trg_embedding(trg_token_ids_batch)  # get embedding vectors for token ids
+        return src_representations_batch
+
+    def decode(self, trg_token_ids_batch, src_representations_batch, trg_mask, src_mask):
+        trg_embeddings_batch = self.trg_embedding(trg_token_ids_batch)  # get embedding vectors for trg token ids
         trg_embeddings_batch = self.trg_pos_embedding(trg_embeddings_batch)  # add positional embedding
+        # Shape (B, S, D), where B - batch size, S - longest target token-sequence length and D - model dimension
         trg_representations_batch = self.decoder(trg_embeddings_batch, src_representations_batch, trg_mask, src_mask)
 
-        # Here we have a shape (B, S, V), where B - batch size, S - longest sequence size, V - target vocab size
+        # After this line we'll have a shape (B, S, V), where V - target vocab size, decoder generator does a simple
+        # linear projection followed by log softmax
         trg_log_probs = self.decoder_generator(trg_representations_batch)
 
         # Reshape into (B*S, V) as that's a suitable format for passing it into KL div loss
@@ -165,6 +175,7 @@ class DecoderLayer(nn.Module):
         decoder_trg_self_attention = lambda trb: self.trg_multi_headed_attention(query=trb, key=trb, value=trb, mask=trg_mask)
         decoder_src_attention = lambda trb: self.src_multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
 
+        # todo: make sure trb and srb are really being passed
         trg_representations_batch = self.sublayers[0](trg_representations_batch, decoder_trg_self_attention)
         trg_representations_batch = self.sublayers[1](trg_representations_batch, decoder_src_attention)
         trg_representations_batch = self.sublayers[2](trg_representations_batch, self.pointwise_net)
@@ -211,7 +222,7 @@ class PositionwiseFeedForwardNet(nn.Module):
         Representations batch is of the shape (batch size, max token sequence length, model dimension).
         This net will basically be applied independently to every token's representation (you can think of it as if
         there was a nested for-loop going over the batch size and max token sequence length dimensions
-        and applied this net to token representations. PyTorch does this automagically behind the scenes.
+        and applied this net to token representations. PyTorch does this auto-magically behind the scenes.
 
     """
     def __init__(self, model_dimension, dropout_probability, width_mult=4):
@@ -302,7 +313,7 @@ class MultiHeadedAttention(nn.Module):
     def forward(self, query, key, value, mask):
         batch_size = query.shape[0]
 
-        # todo: verify q/k/v are contiguous, try directly reshaping into PyTorch's optimal shape
+        # todo: verify q/k/v are contiguous, try directly reshaping into optimal shape (B*NH, S, HD)
         # Step 1: Input linear projection
         # Shape before: (B, S, NH*HD) and after this line: (B, NH, S, HD)
         # where B - batch size, NH - number of heads, S - max token sequence length, HD - head dimension
@@ -334,8 +345,7 @@ class Embedding(nn.Module):
         self.model_dimension = model_dimension
 
     def forward(self, token_ids_batch):
-        assert token_ids_batch.ndim == 2, \
-            f'Expected: (batch size, max token sequence length), got {token_ids_batch.shape}'
+        assert token_ids_batch.ndim == 2, f'Expected: (batch size, max token sequence length), got {token_ids_batch.shape}'
 
         # (stated in the paper) multiply the embedding weights by the square root of model dimension
         # Page 5, Chapter 3.4 "Embeddings and Softmax"
@@ -349,7 +359,7 @@ class PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(p=dropout_probability)
 
         # (stated in the paper) Use sine functions whose frequencies form a geometric progression as position encodings,
-        # (learning encodings will also work!). Page 6, Chapter 3.5 "Positional Encoding"
+        # (learning encodings will also work so feel free to change it!). Page 6, Chapter 3.5 "Positional Encoding"
         position_id = torch.arange(0, expected_max_sequence_length).unsqueeze(1)
         frequencies = torch.pow(10000., -torch.arange(0, model_dimension, 2, dtype=torch.float) / model_dimension)
 
@@ -357,6 +367,9 @@ class PositionalEncoding(nn.Module):
         positional_encodings_table = torch.zeros(expected_max_sequence_length, model_dimension)
         positional_encodings_table[:, 0::2] = torch.sin(position_id * frequencies)  # sine on even positions
         positional_encodings_table[:, 1::2] = torch.cos(position_id * frequencies)  # cosine on odd positions
+
+        # Register buffer because we want to save the positional encodings table inside state_dict even though
+        # these are not trainable (model's parameters) so they otherwise would be excluded from the state_dict
         self.register_buffer('positional_encodings_table', positional_encodings_table)
 
     def forward(self, embeddings_batch):
@@ -397,7 +410,7 @@ def analyze_state_dict_shapes_and_names(model):
 
 # Testing the correctness of the transformer model - feel free to ignore - I used it during model development
 if __name__ == "__main__":
-    use_big_transformer = True
+    use_big_transformer = False
 
     # Dummy data
     src_vocab_size = 11

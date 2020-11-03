@@ -309,14 +309,15 @@ class MultiHeadedAttention(nn.Module):
         self.attention_weights = None  # for visualization purposes, I cache the weights here (translation_script.py)
 
     def attention(self, query, key, value, mask):
-        # todo: comments assume self attention - not true
         # Step 1: Scaled dot-product attention, Page 4, Chapter 3.2.1 "Scaled Dot-Product Attention"
-        # query/key/value shape = (B, NH, S, HD), scores shape = (B, NH, S, S)
+        # Notation: B - batch size, S/T max src/trg token-sequence length, NH - number of heads, HD - head dimension
+        # query/key/value shape = (B, NH, S/T, HD), scores shape = (B, NH, S, S), (B, NH, T, T) or (B, NH, T, S)
+        # scores have different shapes as MHA is used in 3 contexts, self attention for src/trg and source attending MHA
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(self.head_dimension)
 
-        # Step 2: Optionally mask words whose representations we want to ignore by setting a big negative number
-        # to locations corresponding to those words (make softmax output 0 probability on those locations).
-        # mask shape = (B, 1, 1, S) will get broad-casted (copied) as needed to match scores shape
+        # Step 2: Optionally mask tokens whose representations we want to ignore by setting a big negative number
+        # to locations corresponding to those tokens (force softmax to output 0 probability on those locations).
+        # mask shape = (B, 1, 1, S) or (B, 1, T, T) will get broad-casted (copied) as needed to match scores shape
         if mask is not None:
             scores.masked_fill_(mask == torch.tensor(False), float("-inf"))
 
@@ -327,25 +328,27 @@ class MultiHeadedAttention(nn.Module):
         attention_weights = self.attention_dropout(attention_weights)
 
         # Step 5: based on attention weights calculate new token representations
-        # attention_weights shape = (B, NH, S, S), value shape = (B, NH, S, HD)
+        # attention_weights shape = (B, NH, S, S)/(B, NH, T, T) or (B, NH, T, S), value shape = (B, NH, S/T, HD)
+        # Final shape (B, NH, S, HD) for source MHAs or (B, NH, T, HD) target MHAs (again MHAs are used in 3 contexts)
         intermediate_token_representations = torch.matmul(attention_weights, value)
 
-        return intermediate_token_representations, attention_weights  # pass attention weights for visualization purposes
+        return intermediate_token_representations, attention_weights  # attention weights for visualization purposes
 
     def forward(self, query, key, value, mask):
         batch_size = query.shape[0]
 
         # todo: verify q/k/v are contiguous, try directly reshaping into optimal shape (B*NH, S, HD)
         # Step 1: Input linear projection
-        # Shape before: (B, S, NH*HD) and after this line: (B, NH, S, HD)
-        # where B - batch size, NH - number of heads, S - max token sequence length, HD - head dimension
+        # Notation: B - batch size, NH - number of heads, S/T - max src/trg token-sequence length, HD - head dimension
+        # Shape goes from (B, S/T, NH*HD) over (B, S/T, NH, HD) to (B, NH, S/T, HD) (NH*HD=D where D is model dimension)
         query, key, value = [net(x).view(batch_size, -1, self.number_of_heads, self.head_dimension).transpose(1, 2)
                              for net, x in zip(self.qkv_nets, (query, key, value))]
 
-        # Step 2: Apply attention
+        # Step 2: Apply attention - compare query with key and use that to combine values (see the function for details)
         intermediate_token_representations, self.attention_weights = self.attention(query, key, value, mask)
 
-        # Step 3: Reshape from (B, NH, S, HD) over (B, S, NH, HD) (via transpose) into (B, S, NHxHD)
+        # Step 3: Reshape from (B, NH, S/T, HD) over (B, S/T, NH, HD) (via transpose) into (B, S/T, NHxHD) which is
+        # the same shape as on the input of MHA (multi-head attention) module
         reshaped = intermediate_token_representations.transpose(1, 2).reshape(batch_size, -1, self.number_of_heads * self.head_dimension)
 
         # Step 4: Output linear projection

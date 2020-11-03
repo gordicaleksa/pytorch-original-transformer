@@ -220,12 +220,12 @@ def build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id):
 
     # Same as src_mask but we additionally want to mask tokens from looking forward into the future tokens
     # Note: wherever the mask value is true we want to attend to that token, otherwise we mask (ignore) it.
-    sequence_length = trg_token_ids_batch.shape[1]
-    trg_padding_mask = (trg_token_ids_batch != pad_token_id).view(batch_size, 1, 1, -1)
+    sequence_length = trg_token_ids_batch.shape[1]  # trg_token_ids shape = (B, T) where T max trg token-sequence length
+    trg_padding_mask = (trg_token_ids_batch != pad_token_id).view(batch_size, 1, 1, -1)  # shape = (B, 1, 1, T)
     trg_no_look_forward_mask = torch.triu(torch.ones((1, 1, sequence_length, sequence_length), device=device) == 1).transpose(2, 3)
 
     # logic AND operation (both padding mask and no-look-forward must be true to attend to a certain target token)
-    trg_mask = trg_padding_mask & trg_no_look_forward_mask
+    trg_mask = trg_padding_mask & trg_no_look_forward_mask  # final shape = (B, 1, T, T)
     num_trg_tokens = torch.sum(trg_padding_mask.long())
 
     return trg_mask, num_trg_tokens

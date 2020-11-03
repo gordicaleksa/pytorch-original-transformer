@@ -29,13 +29,16 @@ class Transformer(nn.Module):
     def __init__(self, model_dimension, src_vocab_size, trg_vocab_size, number_of_heads, number_of_layers, dropout_probability):
         super().__init__()
 
+        # Embeds source/target token ids into embedding vectors
         self.src_embedding = Embedding(src_vocab_size, model_dimension)
-        self.src_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
-
         self.trg_embedding = Embedding(trg_vocab_size, model_dimension)
+
+        # Adds positional information to source/target token's embedding vector
+        # (otherwise we'd lose the positional information which is important in human languages)
+        self.src_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
         self.trg_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
 
-        # All of these will get deep-copied internally
+        # All of these will get deep-copied multiple times internally
         mha = MultiHeadedAttention(model_dimension, number_of_heads, dropout_probability)
         pwn = PositionwiseFeedForwardNet(model_dimension, dropout_probability)
         encoder_layer = EncoderLayer(model_dimension, dropout_probability, mha, pwn)
@@ -44,38 +47,44 @@ class Transformer(nn.Module):
         self.encoder = Encoder(encoder_layer, number_of_layers)
         self.decoder = Decoder(decoder_layer, number_of_layers)
 
+        # Converts final target token representations into log probabilities vectors of the target vocab size
         self.decoder_generator = DecoderGenerator(model_dimension, trg_vocab_size)
         self.init_params()
 
-    def init_params(self):
-        # todo: potentially add special initialization (not mentioned in the paper though, checkout tensor2tensor lib)
-        print('Using default PyTorch initialization.')
+    def init_params(self, default_initialization=True):
+        # Potentially add special initialization (not mentioned in the paper, other implementations use xavier)
+        # It'd be useful to see whether we gain anything from doing xavier over default PyTorch initialization
+        if not default_initialization:
+            for name, p in self.named_parameters():
+                if p.dim() > 1:
+                    nn.init.xavier_uniform_(p)
+                else:
+                    print(name)
 
     def forward(self, src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask):
         src_representations_batch = self.encode(src_token_ids_batch, src_mask)
         trg_log_probs = self.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
         return trg_log_probs
 
-    # Utility functions for optimizing the decoding/translation process (see translation.py)
+    # Modularized into encode/decode functions for optimizing the decoding/translation process (see translation script)
     def encode(self, src_token_ids_batch, src_mask):
         src_embeddings_batch = self.src_embedding(src_token_ids_batch)  # get embedding vectors for src token ids
         src_embeddings_batch = self.src_pos_embedding(src_embeddings_batch)  # add positional embedding
-        # forward pass through the encoder stack
-        src_representations_batch = self.encoder(src_embeddings_batch, src_mask)
+        src_representations_batch = self.encoder(src_embeddings_batch, src_mask)  # forward pass through the encoder
 
         return src_representations_batch
 
     def decode(self, trg_token_ids_batch, src_representations_batch, trg_mask, src_mask):
         trg_embeddings_batch = self.trg_embedding(trg_token_ids_batch)  # get embedding vectors for trg token ids
         trg_embeddings_batch = self.trg_pos_embedding(trg_embeddings_batch)  # add positional embedding
-        # Shape (B, S, D), where B - batch size, S - longest target token-sequence length and D - model dimension
+        # Shape (B, T, D), where B - batch size, T - longest target token-sequence length and D - model dimension
         trg_representations_batch = self.decoder(trg_embeddings_batch, src_representations_batch, trg_mask, src_mask)
 
-        # After this line we'll have a shape (B, S, V), where V - target vocab size, decoder generator does a simple
+        # After this line we'll have a shape (B, T, V), where V - target vocab size, decoder generator does a simple
         # linear projection followed by log softmax
         trg_log_probs = self.decoder_generator(trg_representations_batch)
 
-        # Reshape into (B*S, V) as that's a suitable format for passing it into KL div loss
+        # Reshape into (B*T, V) as that's a suitable format for passing it into KL div loss
         trg_log_probs = trg_log_probs.reshape(-1, trg_log_probs.shape[-1])
 
         return trg_log_probs  # the reason I use log here is that PyTorch's nn.KLDivLoss expects log probabilities
@@ -96,14 +105,17 @@ class Encoder(nn.Module):
         self.norm = nn.LayerNorm(encoder_layer.model_dimension)
 
     def forward(self, src_embeddings_batch, src_mask):
-        # Just update the naming so as to reflect the semantics of what this var will become
+        # Just update the naming so as to reflect the semantics of what this var will become (the initial encoder layer
+        # has embedding vectors as input but later layers have richer token representations)
         src_representations_batch = src_embeddings_batch
 
+        # Forward pass through the encoder stack
         for encoder_layer in self.encoder_layers:
             # src_mask's role is to mask/ignore padded token representations in the multi-headed self-attention module
             src_representations_batch = encoder_layer(src_representations_batch, src_mask)
 
-        # Not mentioned explicitly in the paper
+        # Not mentioned explicitly in the paper (a consequence of using LayerNorm before instead of after the sublayer
+        # check out the SublayerLogic module)
         return self.norm(src_representations_batch)
 
 
@@ -124,6 +136,7 @@ class EncoderLayer(nn.Module):
         # this way we have a uniform interface for the sublayer logic.
         encoder_self_attention = lambda srb: self.multi_headed_attention(query=srb, key=srb, value=srb, mask=src_mask)
 
+        # Self-attention MHA sublayer followed by point-wise feed forward net sublayer
         src_representations_batch = self.sublayers[0](src_representations_batch, encoder_self_attention)
         src_representations_batch = self.sublayers[1](src_representations_batch, self.pointwise_net)
 
@@ -148,10 +161,13 @@ class Decoder(nn.Module):
         # Just update the naming so as to reflect the semantics of what this var will become
         trg_representations_batch = trg_embeddings_batch
 
+        # Forward pass through the decoder stack
         for decoder_layer in self.decoder_layers:
+            # Target mask masks pad tokens as well as future tokens (current target token can't look forward)
             trg_representations_batch = decoder_layer(trg_representations_batch, src_representations_batch, trg_mask, src_mask)
 
-        # not mentioned explicitly in the paper
+        # Not mentioned explicitly in the paper (a consequence of using LayerNorm before instead of after the sublayer
+        # check out the SublayerLogic module)
         return self.norm(trg_representations_batch)
 
 
@@ -171,11 +187,12 @@ class DecoderLayer(nn.Module):
     def forward(self, trg_representations_batch, src_representations_batch, trg_mask, src_mask):
         # Define anonymous (lambda) function which only takes trg_representations_batch (trb - funny name I know)
         # as input - this way we have a uniform interface for the sublayer logic.
-        srb = src_representations_batch
+        # The inputs which are not passed into lambdas are "cached" here that's why the thing works.
+        srb = src_representations_batch  # simple/short alias
         decoder_trg_self_attention = lambda trb: self.trg_multi_headed_attention(query=trb, key=trb, value=trb, mask=trg_mask)
         decoder_src_attention = lambda trb: self.src_multi_headed_attention(query=trb, key=srb, value=srb, mask=src_mask)
 
-        # todo: make sure trb and srb are really being passed
+        # Self-attention MHA sublayer followed by a source-attending MHA and point-wise feed forward net sublayer
         trg_representations_batch = self.sublayers[0](trg_representations_batch, decoder_trg_self_attention)
         trg_representations_batch = self.sublayers[1](trg_representations_batch, decoder_src_attention)
         trg_representations_batch = self.sublayers[2](trg_representations_batch, self.pointwise_net)
@@ -189,7 +206,8 @@ class DecoderLayer(nn.Module):
 
 
 # Note: the original paper had LayerNorm AFTER the residual connection and addition operation
-# multiple experiments I found showed that it's more effective to do it BEFORE
+# multiple experiments I found showed that it's more effective to do it BEFORE, how did they figure out which one is
+# better? Experiments! There is a similar thing in DCGAN and elsewhere.
 class SublayerLogic(nn.Module):
     def __init__(self, model_dimension, dropout_probability):
         super().__init__()
@@ -197,7 +215,7 @@ class SublayerLogic(nn.Module):
         self.dropout = nn.Dropout(p=dropout_probability)
 
     def forward(self, representations_batch, sublayer_module):
-        # Page 7, Chapter 5.4 "Regularization"
+        # Residual connection between input and sublayer output, details: Page 7, Chapter 5.4 "Regularization",
         return representations_batch + self.dropout(sublayer_module(self.norm(representations_batch)))
 
 
@@ -207,11 +225,13 @@ class DecoderGenerator(nn.Module):
 
         self.linear = nn.Linear(model_dimension, vocab_size)
 
-        # -1 stands for apply the log-softmax along the last dimension (final token representation dimension)
+        # -1 stands for apply the log-softmax along the last dimension i.e. over the vocab dimension as the output from
+        # the linear layer has shape (B, T, V), B - batch size, T - max target token-sequence, V - target vocab size
         # again using log softmax as PyTorch's nn.KLDivLoss expects log probabilities (just a technical detail)
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
     def forward(self, trg_representations_batch):
+        # Project from D (model dimension) into V (target vocab size) and apply the log softmax along V dimension
         return self.log_softmax(self.linear(trg_representations_batch))
 
 
@@ -242,8 +262,8 @@ class PositionwiseFeedForwardNet(nn.Module):
 class MultiHeadedAttention(nn.Module):
     """
         This module already exists in PyTorch. The reason I implemented it here from scratch is that
-        PyTorch implementation is super complicated as they made it as generic as possible whereas on the other hand
-        I only want to support a limited use-case.
+        PyTorch implementation is super complicated as they made it as generic/robust as possible whereas
+        on the other hand I only want to support a limited use-case.
 
         Also this is arguable the most important architectural component in the Transformer model.
 
@@ -255,19 +275,21 @@ class MultiHeadedAttention(nn.Module):
         https://jalammar.github.io/illustrated-transformer/
 
         Optimization notes:
+
         qkv_nets could be replaced by Parameter(torch.empty(3 * model_dimension, model_dimension)) and one more matrix
         for bias, which would make the implementation a bit more optimized. For the sake of easier understanding though,
-        I'm doing it like this - using 3 feed forward nets. Conceptually both implementations are the same.
+        I'm doing it like this - using 3 "feed forward nets" (without activation/identity hence the quotation marks).
+        Conceptually both implementations are the same.
 
         PyTorch's query/key/value are of different shape namely (max token sequence length, batch size, model dimension)
         whereas I'm using (batch size, max token sequence length, model dimension) because it's easier to understand
         and consistent with computer vision apps (batch dimension is always first followed by the number of channels (C)
         and image's spatial dimensions height (H) and width (W) -> (B, C, H, W).
 
-        This has an important optimization implication, they can reshape their matrix into (B*NH, S, HD)
-        (where B - batch size, S - max sequence length, NH - number of heads, HD - head dimension) in a single step
-        and I can only get to (B, NH, S, HD) in single step (I could call contiguous() followed by view but that's
-        expensive as it would incur additional matrix copy)
+        This has an important optimization implication, they can reshape their matrix into (B*NH, S/T, HD)
+        (where B - batch size, S/T - max src/trg sequence length, NH - number of heads, HD - head dimension)
+        in a single step and I can only get to (B, NH, S/T, HD) in single step
+        (I could call contiguous() followed by view but that's expensive as it would incur additional matrix copy)
 
     """
 
@@ -278,15 +300,16 @@ class MultiHeadedAttention(nn.Module):
         self.head_dimension = int(model_dimension / number_of_heads)
         self.number_of_heads = number_of_heads
 
-        self.qkv_nets = get_clones(nn.Linear(model_dimension, model_dimension), 3)
+        self.qkv_nets = get_clones(nn.Linear(model_dimension, model_dimension), 3)  # identity activation hence "nets"
         self.out_projection_net = nn.Linear(model_dimension, model_dimension)
 
-        self.attention_dropout = nn.Dropout(p=dropout_probability)  # no pun intended.
+        self.attention_dropout = nn.Dropout(p=dropout_probability)  # no pun intended, not explicitly mentioned in paper
         self.softmax = nn.Softmax(dim=-1)  # -1 stands for apply the softmax along the last dimension
 
-        self.attention_weights = None  # for visualization purposes
+        self.attention_weights = None  # for visualization purposes, I cache the weights here (translation_script.py)
 
     def attention(self, query, key, value, mask):
+        # todo: comments assume self attention - not true
         # Step 1: Scaled dot-product attention, Page 4, Chapter 3.2.1 "Scaled Dot-Product Attention"
         # query/key/value shape = (B, NH, S, HD), scores shape = (B, NH, S, S)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(self.head_dimension)

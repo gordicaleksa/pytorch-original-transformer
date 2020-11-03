@@ -12,6 +12,10 @@ from utils.visualization_utils import visualize_attention
 
 
 # todo: add beam decoding mechanism
+def beam_decoding():
+    print('todo')
+
+
 def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor, max_target_tokens=60):
     device = next(baseline_transformer.parameters()).device
     pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
@@ -23,7 +27,8 @@ def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, t
         trg_mask, _ = build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
         predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
 
-        # This is the greedy decoding part - we find the index of the target token with highest probability
+        # This is the "greedy" part:
+        # We find the index of the target token with highest probability and discard every other possibility
         most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
         # Find the target token associated with this index
         predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]

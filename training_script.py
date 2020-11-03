@@ -122,7 +122,7 @@ def train_transformer(training_config):
     ).to(device)
 
     # Step 3: Prepare other training related utilities
-    kl_div_loss = nn.KLDivLoss(reduction='batchmean')
+    kl_div_loss = nn.KLDivLoss(reduction='mean')
 
     # Makes smooth target distributions as opposed to conventional one-hot distributions
     # My feeling is that this is a really dummy and arbitrary heuristic but time will tell.

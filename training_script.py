@@ -1,7 +1,5 @@
-# todo: train the model and report BLEU
 # todo: write README (add attention visualization to README, plot signal tokens vs pad tokens for different
 #  bucketiterator setup) and open-source
-# todo: create this in a similar fashion to GANs repo, things I've modified, etc.
 # todo: fix the integer division warning
 
 import argparse
@@ -95,7 +93,6 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
     return train_val_loop
 
 
-# todo: after I setup the whole train/val loop step through and make sure that attention mechanism, etc. works as expected
 def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 

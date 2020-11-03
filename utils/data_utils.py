@@ -290,9 +290,9 @@ def sample_text_from_loader(src_field_processor, trg_field_processor, token_ids_
             print()
 
 
-# todo: enable running this from this file directly ImportError: attempted relative import with no known parent package
-#  same will happen in the transformer_model.py
 if __name__ == "__main__":
+    # To run this delete the dot from from .constants import - not the most elegant solution but it works
+    # without me having to add sys.path stuff, if you have a more elegant solution please open an issue <3
     batch_size = 8
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset_path = os.path.join(os.path.dirname(__file__), os.pardir, '.data')

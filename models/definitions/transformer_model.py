@@ -337,7 +337,6 @@ class MultiHeadedAttention(nn.Module):
     def forward(self, query, key, value, mask):
         batch_size = query.shape[0]
 
-        # todo: verify q/k/v are contiguous, try directly reshaping into optimal shape (B*NH, S, HD)
         # Step 1: Input linear projection
         # Notation: B - batch size, NH - number of heads, S/T - max src/trg token-sequence length, HD - head dimension
         # Shape goes from (B, S/T, NH*HD) over (B, S/T, NH, HD) to (B, NH, S/T, HD) (NH*HD=D where D is model dimension)
@@ -348,7 +347,7 @@ class MultiHeadedAttention(nn.Module):
         intermediate_token_representations, self.attention_weights = self.attention(query, key, value, mask)
 
         # Step 3: Reshape from (B, NH, S/T, HD) over (B, S/T, NH, HD) (via transpose) into (B, S/T, NHxHD) which is
-        # the same shape as on the input of MHA (multi-head attention) module
+        # the same shape as in the beginning of this forward function i.e. input to MHA (multi-head attention) module
         reshaped = intermediate_token_representations.transpose(1, 2).reshape(batch_size, -1, self.number_of_heads * self.head_dimension)
 
         # Step 4: Output linear projection
@@ -372,9 +371,13 @@ class Embedding(nn.Module):
     def forward(self, token_ids_batch):
         assert token_ids_batch.ndim == 2, f'Expected: (batch size, max token sequence length), got {token_ids_batch.shape}'
 
+        # token_ids_batch has shape (B, S/T), where B - batch size, S/T max src/trg token-sequence length
+        # Final shape will be (B, S/T, D) where D is the model dimension, every token id has associated vector
+        embeddings = self.embeddings_table(token_ids_batch)
+
         # (stated in the paper) multiply the embedding weights by the square root of model dimension
         # Page 5, Chapter 3.4 "Embeddings and Softmax"
-        return self.embeddings_table(token_ids_batch) * math.sqrt(self.model_dimension)
+        return embeddings * math.sqrt(self.model_dimension)
 
 
 class PositionalEncoding(nn.Module):
@@ -394,16 +397,20 @@ class PositionalEncoding(nn.Module):
         positional_encodings_table[:, 1::2] = torch.cos(position_id * frequencies)  # cosine on odd positions
 
         # Register buffer because we want to save the positional encodings table inside state_dict even though
-        # these are not trainable (model's parameters) so they otherwise would be excluded from the state_dict
+        # these are not trainable (not model's parameters) so they otherwise would be excluded from the state_dict
         self.register_buffer('positional_encodings_table', positional_encodings_table)
 
     def forward(self, embeddings_batch):
         assert embeddings_batch.ndim == 3 and embeddings_batch.shape[-1] == self.positional_encodings_table.shape[1], \
             f'Expected (batch size, max token sequence length, model dimension) got {embeddings_batch.shape}'
 
+        # embedding_batch's shape = (B, S/T, D), where S/T max src/trg token-sequence length, D - model dimension
+        # So here we get (S/T, D) shape which will get broad-casted to (B, S/T, D) when we try and add it to embeddings
+        positional_encodings = self.positional_encodings_table[:embeddings_batch.shape[1]]
+
         # (stated in the paper) Applying dropout to the sum of positional encodings and token embeddings
         # Page 7, Chapter 5.4 "Regularization"
-        return self.dropout(embeddings_batch + self.positional_encodings_table[:embeddings_batch.shape[1]])
+        return self.dropout(embeddings_batch + positional_encodings)
 
 
 #

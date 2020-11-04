@@ -224,7 +224,7 @@ def get_data_loaders(dataset_path, english_to_german, batch_size, device):
     return train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor
 
 
-def build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id):
+def get_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id):
     batch_size = src_token_ids_batch.shape[0]
 
     # src_mask shape = (B, 1, 1, S) check out attention function in transformer_model.py where masks are applied
@@ -235,7 +235,7 @@ def build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id):
     return src_mask, num_src_tokens
 
 
-def build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id):
+def get_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id):
     batch_size = trg_token_ids_batch.shape[0]
     device = trg_token_ids_batch.device
 
@@ -253,8 +253,8 @@ def build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id):
 
 
 def get_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device):
-    src_mask, num_src_tokens = build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
-    trg_mask, num_trg_tokens = build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
+    src_mask, num_src_tokens = get_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
+    trg_mask, num_trg_tokens = get_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
 
     return src_mask, trg_mask, num_src_tokens, num_trg_tokens
 

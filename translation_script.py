@@ -6,7 +6,7 @@ from torchtext.data import Example
 
 
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import get_datasets_and_vocabs, build_masks_and_count_tokens_src, build_masks_and_count_tokens_trg
+from utils.data_utils import get_datasets_and_vocabs, get_masks_and_count_tokens_src, get_masks_and_count_tokens_trg
 from utils.constants import *
 from utils.visualization_utils import visualize_attention
 from utils.decoding_utils import greedy_decoding, get_beam_decoder, DecodingMethod
@@ -50,7 +50,7 @@ def translate_a_single_sentence(translation_config):
 
     with torch.no_grad():
         # Step 4: Optimization - compute the source token representations only once
-        src_mask, _ = build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
+        src_mask, _ = get_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
         src_representations_batch = baseline_transformer.encode(src_token_ids_batch, src_mask)
 
         # Step 5: Decoding process

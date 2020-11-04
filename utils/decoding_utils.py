@@ -6,7 +6,7 @@ import numpy as np
 
 
 from .constants import *
-from utils.data_utils import build_masks_and_count_tokens_trg
+from utils.data_utils import get_masks_and_count_tokens_trg
 
 
 class DecodingMethod(enum.Enum):
@@ -35,7 +35,7 @@ def get_beam_decoder(translation_config):
         hypothesis_probs = torch.zeros((beam_size, 1), device=device)
 
         while True:
-            trg_mask, _ = build_masks_and_count_tokens_trg(hypothesis_batch, pad_token_id)
+            trg_mask, _ = get_masks_and_count_tokens_trg(hypothesis_batch, pad_token_id)
             predicted_log_distributions = baseline_transformer.decode(hypothesis_batch, src_representations_batch, trg_mask, src_mask)
 
             log_probs, indices = torch.topk(predicted_log_distributions, beam_size, dim=-1, sorted=True)
@@ -88,7 +88,7 @@ def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, t
     is_decoded = [False] * src_representations_batch.shape[0]
 
     while True:
-        trg_mask, _ = build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
+        trg_mask, _ = get_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
         predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
 
         # This is the "greedy" part of the greedy decoding:
@@ -115,4 +115,15 @@ def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, t
         # Prepare the input for the next iteration (merge old token ids with the new column of most probable token ids)
         trg_token_ids_batch = torch.cat((trg_token_ids_batch, torch.unsqueeze(torch.tensor(most_probable_last_token_indices, device=device), 1)), 1)
 
-    return target_sentences_tokens
+    # Post process the sentences - remove everything after the EOS token
+    target_sentences_tokens_post = []
+    for target_sentence_tokens in target_sentences_tokens:
+        try:
+            target_index = target_sentence_tokens.index(EOS_TOKEN) + 1
+        except:
+            target_index = None
+
+        target_sentence_tokens = target_sentence_tokens[:target_index]
+        target_sentences_tokens_post.append(target_sentence_tokens)
+
+    return target_sentences_tokens_post

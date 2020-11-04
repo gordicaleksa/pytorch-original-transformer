@@ -22,7 +22,7 @@ from nltk.translate.bleu_score import sentence_bleu
 
 from utils.optimizers_and_distributions import CustomLRAdamOptimizer, LabelSmoothingDistribution
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import get_data_loaders, get_masks_and_count_tokens, get_src_and_trg_batches
+from utils.data_utils import get_data_loaders, get_masks_and_count_tokens, get_src_and_trg_batches, get_masks_and_count_tokens_src
 import utils.utils as utils
 from utils.constants import *
 from utils.decoding_utils import greedy_decoding
@@ -36,10 +36,18 @@ writer = SummaryWriter()  # (tensorboard) writer will output to ./runs/ director
 
 
 # Calculate the BLEU-4 score
-def calculate_bleu_score(token_ids_loader):
+def calculate_bleu_score(transformer, token_ids_loader, trg_field_processor):
     with torch.no_grad():
+        pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
+
         for batch_idx, token_ids_batch in enumerate(token_ids_loader):
             src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = get_src_and_trg_batches(token_ids_batch)
+
+            # Step 4: Optimization - compute the source token representations only once
+            src_mask, _ = get_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
+            src_representations_batch = transformer.encode(src_token_ids_batch, src_mask)
+
+            predicted_sentences = greedy_decoding(transformer, src_representations_batch, src_mask, trg_field_processor)
         # hypothesis = ['This', 'is', 'cat']
         # reference = ['This', 'is', 'a', 'cat']
         # references = [reference]  # list of references for 1 sentence.

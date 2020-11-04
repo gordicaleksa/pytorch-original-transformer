@@ -17,6 +17,7 @@ import torch
 from torch import nn
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
+from nltk.translate.bleu_score import sentence_bleu
 
 
 from utils.optimizers_and_distributions import CustomLRAdamOptimizer, LabelSmoothingDistribution
@@ -28,6 +29,7 @@ from utils.constants import *
 
 # Global vars for logging purposes
 num_of_trg_tokens_processed = 0
+bleu_scores = []
 global_train_step, global_val_step = [0, 0]
 writer = SummaryWriter()  # (tensorboard) writer will output to ./runs/ directory by default
 
@@ -95,6 +97,12 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
             else:
                 global_val_step += 1
 
+                # # Calculate the BLEU-4 score
+                # hypothesis = ['This', 'is', 'cat']
+                # reference = ['This', 'is', 'a', 'cat']
+                # references = [reference]  # list of references for 1 sentence.
+                # bleu_score = sentence_bleu(references, hypothesis)
+
                 if training_config['enable_tensorboard']:
                     writer.add_scalar('val_loss', loss.item(), global_val_step)
 
@@ -105,7 +113,7 @@ def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU, I hope so!
 
     # Step 1: Prepare data loaders
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['dataset_path'], training_config['batch_size'], device)
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['dataset_path'], training_config['english_to_german'], training_config['batch_size'], device)
 
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # pad token id is the same for target as well
     src_vocab_size = len(src_field_processor.vocab)
@@ -165,6 +173,7 @@ if __name__ == "__main__":
     # You should adjust this for your particular machine (I have RTX 2080 with 8 GBs of VRAM so this fits nicely!)
     parser.add_argument("--batch_size", type=int, help="target number of tokens in a src/trg batch", default=1500)
     parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
+    parser.add_argument("--english_to_german", type=bool, help="train the English to German model or vice versa", default=True)
 
     # Logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging", default=True)

@@ -1,19 +1,72 @@
 import argparse
+import enum
 
 
 import torch
 from torchtext.data import Example
+import numpy as np
 
 
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import build_datasets_and_vocabs, build_masks_and_count_tokens_src, build_masks_and_count_tokens_trg
+from utils.data_utils import get_datasets_and_vocabs, build_masks_and_count_tokens_src, build_masks_and_count_tokens_trg
 from utils.constants import *
 from utils.visualization_utils import visualize_attention
 
 
-# todo: add beam decoding mechanism
-def beam_decoding():
-    print('todo')
+class DecodingMethod(enum.Enum):
+    GREEDY = 0,
+    BEAM = 1
+
+
+# https://arxiv.org/pdf/1609.08144.pdf introduces various heuristics into the beam search algorithm like coverage
+# penalty, etc. Here I only designed a simple beam search algorithm with length penalty. As the probability of the
+# sequence is constructed by multiplying the conditional probabilities (which are numbers smaller than 1) the beam
+# search algorithm will prefer shorter sentences which we compensate for using the length penalty.
+def get_beam_decoder(translation_config):
+    beam_size = translation_config['beam_size']
+    length_penalty_coefficient = translation_config['length_penalty_coefficient']
+
+    def beam_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor, max_target_tokens=60):
+        device = next(baseline_transformer.parameters()).device
+        pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
+
+        target_sentence_tokens = [BOS_TOKEN]  # initial prompt - beginning/start of the sentence token
+        trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
+
+        hypothesis_batch = trg_token_ids_batch.repeat(beam_size, 1)
+        src_representations_batch = src_representations_batch.repeat(beam_size, 1, 1)
+
+        hypothesis_probs = torch.zeros((beam_size, 1), device=device)
+
+        while True:
+            trg_mask, _ = build_masks_and_count_tokens_trg(hypothesis_batch, pad_token_id)
+            predicted_log_distributions = baseline_transformer.decode(hypothesis_batch, src_representations_batch, trg_mask, src_mask)
+
+            log_probs, indices = torch.topk(predicted_log_distributions, beam_size, dim=-1, sorted=True)
+
+            new_probs = hypothesis_probs + log_probs
+            _, new_indices = torch.topk(new_probs.flatten(), beam_size)
+
+            i = np.array(np.unravel_index(new_indices.cpu().numpy(), new_probs.cpu().numpy().shape)).T
+
+            indices_np = indices.cpu().numpy()
+            new_words_indices = indices_np[i]
+            new_words = [trg_field_processor.vocab.itos[i] for i in new_words_indices]
+
+            most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
+            # Find the target token associated with this index
+            predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
+
+            target_sentence_tokens.append(predicted_word)
+            if predicted_word == EOS_TOKEN or len(target_sentence_tokens) == max_target_tokens:
+                break
+
+            # Prepare the input for the next iteration
+            trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
+
+        return target_sentence_tokens
+
+    return beam_decoding
 
 
 def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor, max_target_tokens=60):
@@ -48,7 +101,7 @@ def translate_a_single_sentence(translation_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare the field processor (tokenizer, numericalizer)
-    _, _, src_field_processor, trg_field_processor = build_datasets_and_vocabs(translation_config['dataset_path'])
+    _, _, src_field_processor, trg_field_processor = get_datasets_and_vocabs(translation_config['dataset_path'], translation_config['english_to_german'])
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # needed for constructing masks
 
@@ -93,7 +146,11 @@ def translate_a_single_sentence(translation_config):
         src_representations_batch = baseline_transformer.encode(src_token_ids_batch, src_mask)
 
         # Step 5: Decoding process
-        target_sentence_tokens = greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor)
+        if translation_config['decoding_method'] == DecodingMethod.GREEDY:
+            target_sentence_tokens = greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor)
+        else:
+            beam_decoding = get_beam_decoder(translation_config)
+            target_sentence_tokens = beam_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor)
         print(f'Translation | Target sentence tokens = {target_sentence_tokens}')
 
         # Step 6: Potentially visualize the encoder/decoder attention weights
@@ -106,11 +163,18 @@ if __name__ == "__main__":
     # modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
     #
     parser = argparse.ArgumentParser()
-    parser.add_argument("--german_sentence", type=str, help="German sentence to translate into English", default="Ich bin ein guter Mensch, denke ich.")
+    parser.add_argument("--source_sentence", type=str, help="source sentence to translate into target", default="Ich bin ein guter Mensch, denke ich.")
+    parser.add_argument("--english_to_german", type=str, help="using the english to german tokenizers", default=False)
     parser.add_argument("--model_name", type=str, help="transformer model name", default=r'transformer_000000.pth')
-    parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
+
+    parser.add_argument("--decoding_method", type=str, help="pick between different decoding methods", default=DecodingMethod.BEAM)
+    parser.add_argument("--beam_size", type=int, help="used only in case decoding method is chosen", default=4)
+    parser.add_argument("--length_penalty_coefficient", type=int, help="length penalty for the beam search", default=0.6)
 
     parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=True)
+
+    # Leave this the same as in the training script - used to reconstruct the field processors
+    parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
     args = parser.parse_args()
 
     # Wrapping training configuration into a dictionary

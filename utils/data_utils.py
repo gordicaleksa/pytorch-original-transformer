@@ -44,6 +44,8 @@ class FastTranslationDataset(Dataset):
         assert len(cached_data_src) == len(cached_data_trg), f'Source and target data should be of the same length.'
 
         examples = []
+        src_dataset_total_number_of_tokens = 0
+        trg_dataset_total_number_of_tokens = 0
         for src_tokenized_data, trg_tokenized_data in zip(cached_data_src, cached_data_trg):
             ex = Example()
 
@@ -51,6 +53,17 @@ class FastTranslationDataset(Dataset):
             setattr(ex, 'trg', trg_tokenized_data)
 
             examples.append(ex)
+
+            # Update the number of tokens
+            src_dataset_total_number_of_tokens += len(src_tokenized_data)
+            trg_dataset_total_number_of_tokens += len(trg_tokenized_data)
+
+        # Print relevant information about the dataset (parsing the cache file name)
+        filename_parts = os.path.split(cache_path)[1].split('_')
+        src_language, trg_language = ('English', 'German') if filename_parts[0] == 'en' else ('German', 'English')
+        dataset_type = 'train' if filename_parts[2] == 'train' else 'val'
+        print(f'{dataset_type} dataset has {src_dataset_total_number_of_tokens} tokens in the source language ({src_language}) corpus.')
+        print(f'{dataset_type} dataset has {trg_dataset_total_number_of_tokens} tokens in the target language ({trg_language}) corpus.')
 
         # Call the parent class Dataset's constructor
         super().__init__(examples, fields, **kwargs)
@@ -86,7 +99,7 @@ def save_cache(cache_path, dataset):
 
 # todo: add BPE
 # todo: try first with this smaller dataset latter add support for WMT-14 as well
-def build_datasets_and_vocabs(dataset_path, use_caching_mechanism=True):
+def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_caching_mechanism=True):
     spacy_de = spacy.load('de_core_news_sm')
     spacy_en = spacy.load('en_core_web_sm')
 
@@ -98,17 +111,20 @@ def build_datasets_and_vocabs(dataset_path, use_caching_mechanism=True):
 
     # batch first set to ture as my transformer is expecting that format (that's consistent with the format
     # used in  computer vision), namely (B, C, H, W) -> batch size, number of channels, height and width
-    src_field_processor = Field(tokenize=tokenize_de, pad_token=PAD_TOKEN, batch_first=True)
-    trg_field_processor = Field(tokenize=tokenize_en, init_token=BOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN, batch_first=True)
+    src_tokenizer = tokenize_en if english_to_german else tokenize_de
+    trg_tokenizer = tokenize_de if english_to_german else tokenize_en
+    src_field_processor = Field(tokenize=src_tokenizer, pad_token=PAD_TOKEN, batch_first=True)
+    trg_field_processor = Field(tokenize=trg_tokenizer, init_token=BOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN, batch_first=True)
 
     fields = [('src', src_field_processor), ('trg', trg_field_processor)]
     MAX_LEN = 100  # filter out examples that have more than MAX_LEN tokens
     filter_pred = lambda x: len(x.src) <= MAX_LEN and len(x.trg) <= MAX_LEN
 
     # Only call once the splits function it is super slow as it constantly has to redo the tokenization
-    train_cache_path = os.path.join(dataset_path, 'train_cache.csv')
-    val_cache_path = os.path.join(dataset_path, 'val_cache.csv')
-    test_cache_path = os.path.join(dataset_path, 'test_cache.csv')
+    prefix = 'en_de' if english_to_german else 'de_en'
+    train_cache_path = os.path.join(dataset_path, f'{prefix}_train_cache.csv')
+    val_cache_path = os.path.join(dataset_path, f'{prefix}_val_cache.csv')
+    test_cache_path = os.path.join(dataset_path, f'{prefix}_test_cache.csv')
 
     # This simple caching mechanism gave me ~30x speedup on my machine! From ~70s -> ~2.5s!
     ts = time.time()
@@ -117,8 +133,10 @@ def build_datasets_and_vocabs(dataset_path, use_caching_mechanism=True):
         # .src and .trg attributes which contain a tokenized list of strings (created by tokenize_en and tokenize_de).
         # It's that simple, we can consider our datasets as a table with 2 columns 'src' and 'trg'
         # each containing fields with tokenized strings from source and target languages
+        src_ext = '.en' if english_to_german else '.de'
+        trg_ext = '.de' if english_to_german else '.en'
         train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(
-            exts=('.de', '.en'),
+            exts=(src_ext, trg_ext),
             fields=fields,
             root=dataset_path,
             filter_pred=filter_pred
@@ -188,8 +206,8 @@ def batch_size_fn(new_example, count, sofar):
 
 # https://github.com/pytorch/text/issues/536#issuecomment-719945594 <- there is a "bug" in BucketIterator i.e. it's
 # description is misleading as it won't group examples of similar length unless you set sort_within_batch to True!
-def get_data_loaders(dataset_path, batch_size, device):
-    train_dataset, val_dataset, src_field_processor, trg_field_processor = build_datasets_and_vocabs(dataset_path)
+def get_data_loaders(dataset_path, english_to_german, batch_size, device):
+    train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(dataset_path, english_to_german)
 
     # using default sorting function which
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
@@ -296,7 +314,8 @@ if __name__ == "__main__":
     batch_size = 8
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset_path = os.path.join(os.path.dirname(__file__), os.pardir, '.data')
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, batch_size, device)
+    english_to_german = True
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, english_to_german, batch_size, device)
 
     # Verify that the mask logic is correct
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]

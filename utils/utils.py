@@ -28,7 +28,7 @@ def get_available_binary_name():
 
 def get_training_state(training_config, model):
     training_state = {
-        "commit_hash": git.Repo(search_parent_directories=True).head.object.hexsha,
+        # "commit_hash": git.Repo(search_parent_directories=True).head.object.hexsha,
         "num_of_epochs": training_config['num_of_epochs'],
         "state_dict": model.state_dict()
     }

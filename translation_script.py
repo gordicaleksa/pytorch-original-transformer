@@ -6,7 +6,7 @@ from torchtext.data import Example
 
 
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import get_datasets_and_vocabs, get_masks_and_count_tokens_src
+from utils.data_utils import get_datasets_and_vocabs, get_masks_and_count_tokens_src, DatasetType
 from utils.constants import *
 from utils.visualization_utils import visualize_attention
 from utils.decoding_utils import greedy_decoding, get_beam_decoder, DecodingMethod
@@ -17,7 +17,7 @@ def translate_a_single_sentence(translation_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare the field processor (tokenizer, numericalizer)
-    _, _, src_field_processor, trg_field_processor = get_datasets_and_vocabs(translation_config['dataset_path'], translation_config['english_to_german'])
+    _, _, src_field_processor, trg_field_processor = get_datasets_and_vocabs(translation_config['dataset_path'], translation_config['german_to_english'], translation_config['dataset_name'] == DatasetType.IWSLT.name)
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # needed for constructing masks
 
@@ -72,8 +72,10 @@ if __name__ == "__main__":
     #
     parser = argparse.ArgumentParser()
     parser.add_argument("--source_sentence", type=str, help="source sentence to translate into target", default="Ich bin ein guter Mensch, denke ich.")
-    parser.add_argument("--english_to_german", type=str, help="using the english to german tokenizers", default=False)
+    parser.add_argument("--english_to_german", type=bool, help="using the english to german tokenizers", default=False)
+    parser.add_argument("--dataset_name", type=str, choices=['IWSLT', 'WMT14'], help='which dataset to use for training', default=DatasetType.IWSLT.name)
     parser.add_argument("--model_name", type=str, help="transformer model name", default=r'transformer_000000.pth')
+    parser.add_argument("--german_to_english", action='store_true', help="use the German to English tokenizers")
 
     parser.add_argument("--decoding_method", type=str, help="pick between different decoding methods", default=DecodingMethod.GREEDY)
     parser.add_argument("--beam_size", type=int, help="used only in case decoding method is chosen", default=4)

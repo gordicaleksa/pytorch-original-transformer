@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.optimizers_and_distributions import CustomLRAdamOptimizer, LabelSmoothingDistribution
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import get_data_loaders, get_masks_and_count_tokens, get_src_and_trg_batches, get_masks_and_count_tokens_src
+from utils.data_utils import get_data_loaders, get_masks_and_count_tokens, get_src_and_trg_batches, DatasetType
 import utils.utils as utils
 from utils.constants import *
 
@@ -105,7 +105,7 @@ def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU, I hope so!
 
     # Step 1: Prepare data loaders
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['dataset_path'], training_config['english_to_german'], training_config['batch_size'], device)
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['dataset_path'], training_config['german_to_english'], training_config['dataset_name'], training_config['batch_size'], device)
 
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # pad token id is the same for target as well
     src_vocab_size = len(src_field_processor.vocab)
@@ -165,8 +165,10 @@ if __name__ == "__main__":
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=5)
     # You should adjust this for your particular machine (I have RTX 2080 with 8 GBs of VRAM so this fits nicely!)
     parser.add_argument("--batch_size", type=int, help="target number of tokens in a src/trg batch", default=1500)
-    parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
-    parser.add_argument("--english_to_german", type=bool, help="train the English to German model or vice versa", default=True)
+    parser.add_argument("--dataset_path", type=str, help='download dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
+    parser.add_argument("--dataset_name", type=str, choices=['IWSLT', 'WMT14'], help='which dataset to use for training', default=DatasetType.IWSLT.name)
+
+    parser.add_argument("--german_to_english", action='store_true', help="train the English to German model or vice versa")
 
     # Logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging", default=True)
@@ -182,6 +184,3 @@ if __name__ == "__main__":
 
     # Train the original transformer model
     train_transformer(training_config)
-
-
-

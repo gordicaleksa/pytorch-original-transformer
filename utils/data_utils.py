@@ -1,5 +1,6 @@
 import time
 import os
+import enum
 
 
 import torch
@@ -15,6 +16,11 @@ from .constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 #
 # Caching mechanism datasets and functions (you don't need this but it makes things a lot faster!
 #
+
+
+class DatasetType(enum.Enum):
+    IWSLT = 0,
+    WMT14 = 1
 
 
 class FastTranslationDataset(Dataset):
@@ -100,7 +106,7 @@ def save_cache(cache_path, dataset):
 
 # todo: add BPE
 # todo: try first with this smaller dataset latter add support for WMT-14 as well
-def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_iwslt=True, use_caching_mechanism=True):
+def get_datasets_and_vocabs(dataset_path, german_to_english=True, use_iwslt=True, use_caching_mechanism=True):
     spacy_de = spacy.load('de_core_news_sm')
     spacy_en = spacy.load('en_core_web_sm')
 
@@ -112,8 +118,8 @@ def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_iwslt=True
 
     # batch first set to true as my transformer is expecting that format (that's consistent with the format
     # used in  computer vision), namely (B, C, H, W) -> batch size, number of channels, height and width
-    src_tokenizer = tokenize_en if english_to_german else tokenize_de
-    trg_tokenizer = tokenize_de if english_to_german else tokenize_en
+    src_tokenizer = tokenize_de if german_to_english else tokenize_en
+    trg_tokenizer = tokenize_en if german_to_english else tokenize_de
     src_field_processor = Field(tokenize=src_tokenizer, pad_token=PAD_TOKEN, batch_first=True)
     trg_field_processor = Field(tokenize=trg_tokenizer, init_token=BOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN, batch_first=True)
 
@@ -122,7 +128,7 @@ def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_iwslt=True
     filter_pred = lambda x: len(x.src) <= MAX_LEN and len(x.trg) <= MAX_LEN
 
     # Only call once the splits function it is super slow as it constantly has to redo the tokenization
-    prefix = 'en_de' if english_to_german else 'de_en'
+    prefix = 'de_en' if german_to_english else 'en_de'
     prefix += '_iwslt' if use_iwslt else '_wmt14'
     train_cache_path = os.path.join(dataset_path, f'{prefix}_train_cache.csv')
     val_cache_path = os.path.join(dataset_path, f'{prefix}_val_cache.csv')
@@ -135,8 +141,8 @@ def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_iwslt=True
         # .src and .trg attributes which contain a tokenized list of strings (created by tokenize_en and tokenize_de).
         # It's that simple, we can consider our datasets as a table with 2 columns 'src' and 'trg'
         # each containing fields with tokenized strings from source and target languages
-        src_ext = '.en' if english_to_german else '.de'
-        trg_ext = '.de' if english_to_german else '.en'
+        src_ext = '.de' if german_to_english else '.en'
+        trg_ext = '.en' if german_to_english else '.de'
         dataset_split_fn = datasets.IWSLT.splits if use_iwslt else datasets.WMT14.splits
         train_dataset, val_dataset, test_dataset = dataset_split_fn(
             exts=(src_ext, trg_ext),
@@ -209,8 +215,8 @@ def batch_size_fn(new_example, count, sofar):
 
 # https://github.com/pytorch/text/issues/536#issuecomment-719945594 <- there is a "bug" in BucketIterator i.e. it's
 # description is misleading as it won't group examples of similar length unless you set sort_within_batch to True!
-def get_data_loaders(dataset_path, english_to_german, batch_size, device):
-    train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(dataset_path, english_to_german)
+def get_data_loaders(dataset_path, german_to_english, dataset_name, batch_size, device):
+    train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(dataset_path, german_to_english, dataset_name == DatasetType.IWSLT.name)
 
     # using default sorting function which
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
@@ -317,8 +323,9 @@ if __name__ == "__main__":
     batch_size = 8
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset_path = os.path.join(os.path.dirname(__file__), os.pardir, '.data')
-    english_to_german = True
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, english_to_german, batch_size, device)
+    dataset_name = DatasetType.IWSLT.name
+    german_to_english = True
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, german_to_english, dataset_name, batch_size, device)
 
     # Verify that the mask logic is correct
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]

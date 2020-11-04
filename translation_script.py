@@ -6,7 +6,7 @@ from torchtext.data import Example
 
 
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import get_datasets_and_vocabs, get_masks_and_count_tokens_src, get_masks_and_count_tokens_trg
+from utils.data_utils import get_datasets_and_vocabs, get_masks_and_count_tokens_src
 from utils.constants import *
 from utils.visualization_utils import visualize_attention
 from utils.decoding_utils import greedy_decoding, get_beam_decoder, DecodingMethod

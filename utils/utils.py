@@ -1,11 +1,16 @@
 import re
 import os
+import time
 
 
 import git
+import torch
+from nltk.translate.bleu_score import corpus_bleu
 
 
-from .constants import BINARIES_PATH
+from .constants import BINARIES_PATH, PAD_TOKEN
+from .decoding_utils import greedy_decoding
+from .data_utils import get_masks_and_count_tokens_src
 
 
 def get_available_binary_name():
@@ -34,3 +39,35 @@ def get_training_state(training_config, model):
     }
 
     return training_state
+
+
+# Calculate the BLEU-4 score
+def calculate_bleu_score(transformer, token_ids_loader, trg_field_processor):
+    with torch.no_grad():
+        pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
+
+        gt_sentences_corpus = []
+        predicted_sentences_corpus = []
+
+        ts = time.time()
+        for batch_idx, token_ids_batch in enumerate(token_ids_loader):
+            src_token_ids_batch, trg_token_ids_batch = token_ids_batch.src, token_ids_batch.trg
+            if batch_idx % 10 == 0:
+                print(f'batch={batch_idx}, time elapsed = {time.time()-ts} seconds.')
+
+            # Optimization - compute the source token representations only once
+            src_mask, _ = get_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
+            src_representations_batch = transformer.encode(src_token_ids_batch, src_mask)
+
+            predicted_sentences = greedy_decoding(transformer, src_representations_batch, src_mask, trg_field_processor)
+            predicted_sentences_corpus.extend(predicted_sentences)  # add them to the corpus of translations
+
+            # Get the token and not id version of GT (ground-truth) sentences
+            trg_token_ids_batch = trg_token_ids_batch.cpu().numpy()
+            for target_sentence_ids in trg_token_ids_batch:
+                target_sentence_tokens = [trg_field_processor.vocab.itos[id] for id in target_sentence_ids if id != pad_token_id]
+                gt_sentences_corpus.append([target_sentence_tokens])  # add them to the corpus of GT translations
+
+        bleu_score = corpus_bleu(gt_sentences_corpus, predicted_sentences_corpus)
+        print(f'BLEU-4 corpus score = {bleu_score}, corpus length = {len(gt_sentences_corpus)}, time elapsed = {time.time()-ts} seconds.')
+        return bleu_score

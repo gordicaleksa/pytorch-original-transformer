@@ -17,7 +17,6 @@ import torch
 from torch import nn
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
-from nltk.translate.bleu_score import sentence_bleu
 
 
 from utils.optimizers_and_distributions import CustomLRAdamOptimizer, LabelSmoothingDistribution
@@ -25,7 +24,6 @@ from models.definitions.transformer_model import Transformer
 from utils.data_utils import get_data_loaders, get_masks_and_count_tokens, get_src_and_trg_batches, get_masks_and_count_tokens_src
 import utils.utils as utils
 from utils.constants import *
-from utils.decoding_utils import greedy_decoding
 
 
 # Global vars for logging purposes
@@ -33,25 +31,6 @@ num_of_trg_tokens_processed = 0
 bleu_scores = []
 global_train_step, global_val_step = [0, 0]
 writer = SummaryWriter()  # (tensorboard) writer will output to ./runs/ directory by default
-
-
-# Calculate the BLEU-4 score
-def calculate_bleu_score(transformer, token_ids_loader, trg_field_processor):
-    with torch.no_grad():
-        pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
-
-        for batch_idx, token_ids_batch in enumerate(token_ids_loader):
-            src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = get_src_and_trg_batches(token_ids_batch)
-
-            # Step 4: Optimization - compute the source token representations only once
-            src_mask, _ = get_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
-            src_representations_batch = transformer.encode(src_token_ids_batch, src_mask)
-
-            predicted_sentences = greedy_decoding(transformer, src_representations_batch, src_mask, trg_field_processor)
-        # hypothesis = ['This', 'is', 'cat']
-        # reference = ['This', 'is', 'a', 'cat']
-        # references = [reference]  # list of references for 1 sentence.
-        # bleu_score = sentence_bleu(references, hypothesis)
 
 
 # Simple decorator function so that I don't have to pass these arguments every time I call get_train_val_loop
@@ -93,7 +72,6 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
             # Logging and metrics
             #
 
-            # todo: add BLEU
             # todo: gradient clipping for stability?
 
             if is_train:
@@ -168,8 +146,7 @@ def train_transformer(training_config):
         # Validation loop
         with torch.no_grad():
             train_val_loop(is_train=False, token_ids_loader=val_token_ids_loader, epoch=epoch)
-
-    calculate_bleu_score(val_token_ids_loader)
+            bleu_score = utils.calculate_bleu_score(baseline_transformer, val_token_ids_loader, trg_field_processor)
 
     # Save the latest transformer in the binaries directory
     torch.save(utils.get_training_state(training_config, baseline_transformer), os.path.join(BINARIES_PATH, utils.get_available_binary_name()))

@@ -61,7 +61,7 @@ class FastTranslationDataset(Dataset):
         # Print relevant information about the dataset (parsing the cache file name)
         filename_parts = os.path.split(cache_path)[1].split('_')
         src_language, trg_language = ('English', 'German') if filename_parts[0] == 'en' else ('German', 'English')
-        dataset_name = 'iwslt' if filename_parts[2] == 'iwslt' else 'wmt14'
+        dataset_name = 'IWSLT' if filename_parts[2] == 'iwslt' else 'WMT-14'
         dataset_type = 'train' if filename_parts[3] == 'train' else 'val'
         print(f'{dataset_type} dataset ({dataset_name}) has {src_dataset_total_number_of_tokens} tokens in the source language ({src_language}) corpus.')
         print(f'{dataset_type} dataset ({dataset_name}) has {trg_dataset_total_number_of_tokens} tokens in the target language ({trg_language}) corpus.')

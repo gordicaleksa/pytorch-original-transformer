@@ -23,6 +23,11 @@ class DatasetType(enum.Enum):
     WMT14 = 1
 
 
+class LanguageDirection(enum.Enum):
+    E2G = 0,
+    G2E = 1
+
+
 class FastTranslationDataset(Dataset):
     """
         After understanding the source code of torch text's IWSLT, TranslationDataset and Dataset I realized how I
@@ -106,7 +111,8 @@ def save_cache(cache_path, dataset):
 
 # todo: add BPE
 # todo: try first with this smaller dataset latter add support for WMT-14 as well
-def get_datasets_and_vocabs(dataset_path, german_to_english=True, use_iwslt=True, use_caching_mechanism=True):
+def get_datasets_and_vocabs(dataset_path, language_direction, use_iwslt=True, use_caching_mechanism=True):
+    german_to_english = language_direction == LanguageDirection.G2E.name
     spacy_de = spacy.load('de_core_news_sm')
     spacy_en = spacy.load('en_core_web_sm')
 
@@ -215,8 +221,8 @@ def batch_size_fn(new_example, count, sofar):
 
 # https://github.com/pytorch/text/issues/536#issuecomment-719945594 <- there is a "bug" in BucketIterator i.e. it's
 # description is misleading as it won't group examples of similar length unless you set sort_within_batch to True!
-def get_data_loaders(dataset_path, german_to_english, dataset_name, batch_size, device):
-    train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(dataset_path, german_to_english, dataset_name == DatasetType.IWSLT.name)
+def get_data_loaders(dataset_path, language_direction, dataset_name, batch_size, device):
+    train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(dataset_path, language_direction, dataset_name == DatasetType.IWSLT.name)
 
     # using default sorting function which
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
@@ -324,8 +330,8 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset_path = os.path.join(os.path.dirname(__file__), os.pardir, '.data')
     dataset_name = DatasetType.IWSLT.name
-    german_to_english = True
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, german_to_english, dataset_name, batch_size, device)
+    language_direction = LanguageDirection.G2E.name
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, language_direction, dataset_name, batch_size, device)
 
     # Verify that the mask logic is correct
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]

@@ -39,7 +39,7 @@ def translate_a_single_sentence(translation_config):
     baseline_transformer.eval()
 
     # Step 3: Prepare the input sentence
-    source_sentence = translation_config['german_sentence']
+    source_sentence = translation_config['source_sentence']
     ex = Example.fromlist([source_sentence], fields=[('src', src_field_processor)])  # tokenize the sentence
 
     source_sentence_tokens = ex.src
@@ -47,14 +47,6 @@ def translate_a_single_sentence(translation_config):
 
     # Numericalize and convert to cuda tensor
     src_token_ids_batch = src_field_processor.process([source_sentence_tokens], device)
-
-    # Decoding could be further optimized to cache old token activations because they can't look ahead and so
-    # adding a newly predicted token won't change old token's activations.
-    #
-    # Example: we input <s> and do a forward pass. We get intermediate activations for <s> and at the output at position
-    # 0, after the doing linear layer we get e.g. token <I>. Now we input <s>,<I> but <s>'s activations will remain
-    # the same. Similarly say we now got <am> at output position 1, in the next step we input <s>,<I>,<am> and so <I>'s
-    # activations will remain the same as it only looks at/attends to itself and to <s> and so forth.
 
     with torch.no_grad():
         # Step 4: Optimization - compute the source token representations only once
@@ -83,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument("--english_to_german", type=str, help="using the english to german tokenizers", default=False)
     parser.add_argument("--model_name", type=str, help="transformer model name", default=r'transformer_000000.pth')
 
-    parser.add_argument("--decoding_method", type=str, help="pick between different decoding methods", default=DecodingMethod.BEAM)
+    parser.add_argument("--decoding_method", type=str, help="pick between different decoding methods", default=DecodingMethod.GREEDY)
     parser.add_argument("--beam_size", type=int, help="used only in case decoding method is chosen", default=4)
     parser.add_argument("--length_penalty_coefficient", type=int, help="length penalty for the beam search", default=0.6)
 
@@ -98,5 +90,5 @@ if __name__ == "__main__":
     for arg in vars(args):
         translation_config[arg] = getattr(args, arg)
 
-    # Translate the given german sentence
+    # Translate the given source sentence
     translate_a_single_sentence(translation_config)

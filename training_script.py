@@ -36,9 +36,10 @@ writer = SummaryWriter()  # (tensorboard) writer will output to ./runs/ director
 
 
 # Calculate the BLEU-4 score
-def calculate_bleu_score(val_token_ids_loader):
+def calculate_bleu_score(token_ids_loader):
     with torch.no_grad():
-        print('todo')
+        for batch_idx, token_ids_batch in enumerate(token_ids_loader):
+            src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = get_src_and_trg_batches(token_ids_batch)
         # hypothesis = ['This', 'is', 'cat']
         # reference = ['This', 'is', 'a', 'cat']
         # references = [reference]  # list of references for 1 sentence.

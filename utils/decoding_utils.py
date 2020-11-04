@@ -65,28 +65,54 @@ def get_beam_decoder(translation_config):
     return beam_decoding
 
 
-def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor, max_target_tokens=60):
+def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor, max_target_tokens=100):
+    """
+    Decoding could be further optimized to cache old token activations because they can't look ahead and so
+    adding a newly predicted token won't change old token's activations.
+
+    Example: we input <s> and do a forward pass. We get intermediate activations for <s> and at the output at position
+    0, after the doing linear layer we get e.g. token <I>. Now we input <s>,<I> but <s>'s activations will remain
+    the same. Similarly say we now got <am> at output position 1, in the next step we input <s>,<I>,<am> and so <I>'s
+    activations will remain the same as it only looks at/attends to itself and to <s> and so forth.
+
+    """
+
     device = next(baseline_transformer.parameters()).device
     pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
 
-    target_sentence_tokens = [BOS_TOKEN]  # initial prompt - beginning/start of the sentence token
-    trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
+    # Initial prompt is the beginning/start of the sentence token. Make it compatible shape with source batch => (B,1)
+    target_sentences_tokens = [[BOS_TOKEN] for _ in range(src_representations_batch.shape[0])]
+    trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[tokens[0]]] for tokens in target_sentences_tokens], device=device)
+
+    # Set to true for a particular target sentence once it reaches the EOS (end-of-sentence) token
+    is_decoded = [False] * src_representations_batch.shape[0]
 
     while True:
         trg_mask, _ = build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
         predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
 
-        # This is the "greedy" part:
-        # We find the index of the target token with highest probability and discard every other possibility
-        most_probable_word_index = torch.argmax(predicted_log_distributions[-1]).cpu().numpy()
-        # Find the target token associated with this index
-        predicted_word = trg_field_processor.vocab.itos[most_probable_word_index]
+        # This is the "greedy" part of the greedy decoding:
+        # We find indices of the highest probability target tokens and discard every other possibility
+        # Shape = (B*T, V) where T is the current max token-sequence length and V target vocab size
+        most_probable_all_tokens_indices = torch.argmax(predicted_log_distributions, dim=-1).cpu().numpy()
 
-        target_sentence_tokens.append(predicted_word)
-        if predicted_word == EOS_TOKEN or len(target_sentence_tokens) == max_target_tokens:
+        # Extract only the indices of last token for every target sentence (we skip every T tokens)
+        num_of_trg_tokens = len(target_sentences_tokens[0])
+        most_probable_last_token_indices = most_probable_all_tokens_indices[num_of_trg_tokens-1::num_of_trg_tokens]
+
+        # Find target tokens associated with these indices
+        predicted_words = [trg_field_processor.vocab.itos[index] for index in most_probable_last_token_indices]
+
+        for idx, predicted_word in enumerate(predicted_words):
+            target_sentences_tokens[idx].append(predicted_word)
+
+            if predicted_word == EOS_TOKEN:  # once we find EOS token for a particular sentence we flag it
+                is_decoded[idx] = True
+
+        if all(is_decoded) or num_of_trg_tokens == max_target_tokens:
             break
 
-        # Prepare the input for the next iteration
-        trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
+        # Prepare the input for the next iteration (merge old token ids with the new column of most probable token ids)
+        trg_token_ids_batch = torch.cat((trg_token_ids_batch, torch.unsqueeze(torch.tensor(most_probable_last_token_indices, device=device), 1)), 1)
 
-    return target_sentence_tokens
+    return target_sentences_tokens

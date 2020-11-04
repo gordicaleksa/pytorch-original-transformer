@@ -61,9 +61,10 @@ class FastTranslationDataset(Dataset):
         # Print relevant information about the dataset (parsing the cache file name)
         filename_parts = os.path.split(cache_path)[1].split('_')
         src_language, trg_language = ('English', 'German') if filename_parts[0] == 'en' else ('German', 'English')
-        dataset_type = 'train' if filename_parts[2] == 'train' else 'val'
-        print(f'{dataset_type} dataset has {src_dataset_total_number_of_tokens} tokens in the source language ({src_language}) corpus.')
-        print(f'{dataset_type} dataset has {trg_dataset_total_number_of_tokens} tokens in the target language ({trg_language}) corpus.')
+        dataset_name = 'iwslt' if filename_parts[2] == 'iwslt' else 'wmt14'
+        dataset_type = 'train' if filename_parts[3] == 'train' else 'val'
+        print(f'{dataset_type} dataset ({dataset_name}) has {src_dataset_total_number_of_tokens} tokens in the source language ({src_language}) corpus.')
+        print(f'{dataset_type} dataset ({dataset_name}) has {trg_dataset_total_number_of_tokens} tokens in the target language ({trg_language}) corpus.')
 
         # Call the parent class Dataset's constructor
         super().__init__(examples, fields, **kwargs)
@@ -99,7 +100,7 @@ def save_cache(cache_path, dataset):
 
 # todo: add BPE
 # todo: try first with this smaller dataset latter add support for WMT-14 as well
-def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_caching_mechanism=True):
+def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_iwslt=True, use_caching_mechanism=True):
     spacy_de = spacy.load('de_core_news_sm')
     spacy_en = spacy.load('en_core_web_sm')
 
@@ -109,7 +110,7 @@ def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_caching_me
     def tokenize_en(text):
         return [tok.text for tok in spacy_en.tokenizer(text)]
 
-    # batch first set to ture as my transformer is expecting that format (that's consistent with the format
+    # batch first set to true as my transformer is expecting that format (that's consistent with the format
     # used in  computer vision), namely (B, C, H, W) -> batch size, number of channels, height and width
     src_tokenizer = tokenize_en if english_to_german else tokenize_de
     trg_tokenizer = tokenize_de if english_to_german else tokenize_en
@@ -122,6 +123,7 @@ def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_caching_me
 
     # Only call once the splits function it is super slow as it constantly has to redo the tokenization
     prefix = 'en_de' if english_to_german else 'de_en'
+    prefix += '_iwslt' if use_iwslt else '_wmt14'
     train_cache_path = os.path.join(dataset_path, f'{prefix}_train_cache.csv')
     val_cache_path = os.path.join(dataset_path, f'{prefix}_val_cache.csv')
     test_cache_path = os.path.join(dataset_path, f'{prefix}_test_cache.csv')
@@ -135,7 +137,8 @@ def get_datasets_and_vocabs(dataset_path, english_to_german=True, use_caching_me
         # each containing fields with tokenized strings from source and target languages
         src_ext = '.en' if english_to_german else '.de'
         trg_ext = '.de' if english_to_german else '.en'
-        train_dataset, val_dataset, test_dataset = datasets.IWSLT.splits(
+        dataset_split_fn = datasets.IWSLT.splits if use_iwslt else datasets.WMT14.splits
+        train_dataset, val_dataset, test_dataset = dataset_split_fn(
             exts=(src_ext, trg_ext),
             fields=fields,
             root=dataset_path,
@@ -249,14 +252,14 @@ def build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id):
     return trg_mask, num_trg_tokens
 
 
-def build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device):
+def get_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch, pad_token_id, device):
     src_mask, num_src_tokens = build_masks_and_count_tokens_src(src_token_ids_batch, pad_token_id)
     trg_mask, num_trg_tokens = build_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
 
     return src_mask, trg_mask, num_src_tokens, num_trg_tokens
 
 
-def fetch_src_and_trg_batches(token_ids_batch):
+def get_src_and_trg_batches(token_ids_batch):
     src_token_ids_batch, trg_token_ids_batch = token_ids_batch.src, token_ids_batch.trg
 
     # Target input should be shifted by 1 compared to the target output tokens
@@ -321,7 +324,7 @@ if __name__ == "__main__":
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]
     for batch in train_token_ids_loader:
         # Visually inspect that masks make sense
-        src_padding_mask, trg_mask, num_src_tokens, num_trg_tokens = build_masks_and_count_tokens(batch.src, batch.trg, pad_token_id, device)
+        src_padding_mask, trg_mask, num_src_tokens, num_trg_tokens = get_masks_and_count_tokens(batch.src, batch.trg, pad_token_id, device)
         break
 
     # Check vocab size

@@ -22,9 +22,10 @@ from nltk.translate.bleu_score import sentence_bleu
 
 from utils.optimizers_and_distributions import CustomLRAdamOptimizer, LabelSmoothingDistribution
 from models.definitions.transformer_model import Transformer
-from utils.data_utils import get_data_loaders, build_masks_and_count_tokens, fetch_src_and_trg_batches
+from utils.data_utils import get_data_loaders, get_masks_and_count_tokens, get_src_and_trg_batches
 import utils.utils as utils
 from utils.constants import *
+from utils.decoding_utils import greedy_decoding
 
 
 # Global vars for logging purposes
@@ -32,6 +33,16 @@ num_of_trg_tokens_processed = 0
 bleu_scores = []
 global_train_step, global_val_step = [0, 0]
 writer = SummaryWriter()  # (tensorboard) writer will output to ./runs/ directory by default
+
+
+# Calculate the BLEU-4 score
+def calculate_bleu_score(val_token_ids_loader):
+    with torch.no_grad():
+        print('todo')
+        # hypothesis = ['This', 'is', 'cat']
+        # reference = ['This', 'is', 'a', 'cat']
+        # references = [reference]  # list of references for 1 sentence.
+        # bleu_score = sentence_bleu(references, hypothesis)
 
 
 # Simple decorator function so that I don't have to pass these arguments every time I call get_train_val_loop
@@ -51,8 +62,8 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
         # Main loop - start of the CORE PART
         #
         for batch_idx, token_ids_batch in enumerate(token_ids_loader):
-            src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = fetch_src_and_trg_batches(token_ids_batch)
-            src_mask, trg_mask, num_src_tokens, num_trg_tokens = build_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch_input, pad_token_id, device)
+            src_token_ids_batch, trg_token_ids_batch_input, trg_token_ids_batch_gt = get_src_and_trg_batches(token_ids_batch)
+            src_mask, trg_mask, num_src_tokens, num_trg_tokens = get_masks_and_count_tokens(src_token_ids_batch, trg_token_ids_batch_input, pad_token_id, device)
 
             # log because the KL loss expects log probabilities (just an implementation detail)
             predicted_log_distributions = baseline_transformer(src_token_ids_batch, trg_token_ids_batch_input, src_mask, trg_mask)
@@ -96,12 +107,6 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
                     torch.save(utils.get_training_state(training_config, baseline_transformer), os.path.join(CHECKPOINTS_PATH, ckpt_model_name))
             else:
                 global_val_step += 1
-
-                # # Calculate the BLEU-4 score
-                # hypothesis = ['This', 'is', 'cat']
-                # reference = ['This', 'is', 'a', 'cat']
-                # references = [reference]  # list of references for 1 sentence.
-                # bleu_score = sentence_bleu(references, hypothesis)
 
                 if training_config['enable_tensorboard']:
                     writer.add_scalar('val_loss', loss.item(), global_val_step)
@@ -154,6 +159,8 @@ def train_transformer(training_config):
         # Validation loop
         with torch.no_grad():
             train_val_loop(is_train=False, token_ids_loader=val_token_ids_loader, epoch=epoch)
+
+    calculate_bleu_score(val_token_ids_loader)
 
     # Save the latest transformer in the binaries directory
     torch.save(utils.get_training_state(training_config, baseline_transformer), os.path.join(BINARIES_PATH, utils.get_available_binary_name()))

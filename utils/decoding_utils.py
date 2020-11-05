@@ -26,17 +26,15 @@ def get_beam_decoder(translation_config):
         device = next(baseline_transformer.parameters()).device
         pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
 
-        target_sentence_tokens = [BOS_TOKEN]  # initial prompt - beginning/start of the sentence token
-        trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[token] for token in target_sentence_tokens]], device=device)
-
-        hypothesis_batch = trg_token_ids_batch.repeat(beam_size, 1)
-        src_representations_batch = src_representations_batch.repeat(beam_size, 1, 1)
+        # Initial prompt is the beginning/start of the sentence token. Make it compatible shape with source batch => (B,1)
+        target_sentences_tokens = [[BOS_TOKEN] for _ in range(src_representations_batch.shape[0])]
+        trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[tokens[0]]] for tokens in target_sentences_tokens], device=device)
 
         hypothesis_probs = torch.zeros((beam_size, 1), device=device)
 
         while True:
-            trg_mask, _ = get_masks_and_count_tokens_trg(hypothesis_batch, pad_token_id)
-            predicted_log_distributions = baseline_transformer.decode(hypothesis_batch, src_representations_batch, trg_mask, src_mask)
+            trg_mask, _ = get_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
+            predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
 
             log_probs, indices = torch.topk(predicted_log_distributions, beam_size, dim=-1, sorted=True)
 
@@ -89,16 +87,16 @@ def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, t
 
     while True:
         trg_mask, _ = get_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
+        # Shape = (B*T, V) where T is the current token-sequence length and V target vocab size
         predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
+
+        # Extract only the indices of last token for every target sentence (we take every T-th token)
+        num_of_trg_tokens = len(target_sentences_tokens[0])
+        predicted_log_distributions = predicted_log_distributions[num_of_trg_tokens-1::num_of_trg_tokens]
 
         # This is the "greedy" part of the greedy decoding:
         # We find indices of the highest probability target tokens and discard every other possibility
-        # Shape = (B*T, V) where T is the current max token-sequence length and V target vocab size
-        most_probable_all_tokens_indices = torch.argmax(predicted_log_distributions, dim=-1).cpu().numpy()
-
-        # Extract only the indices of last token for every target sentence (we skip every T tokens)
-        num_of_trg_tokens = len(target_sentences_tokens[0])
-        most_probable_last_token_indices = most_probable_all_tokens_indices[num_of_trg_tokens-1::num_of_trg_tokens]
+        most_probable_last_token_indices = torch.argmax(predicted_log_distributions, dim=-1).cpu().numpy()
 
         # Find target tokens associated with these indices
         predicted_words = [trg_field_processor.vocab.itos[index] for index in most_probable_last_token_indices]

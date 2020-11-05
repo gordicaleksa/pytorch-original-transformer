@@ -13,11 +13,6 @@ import spacy
 from .constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 
 
-#
-# Caching mechanism datasets and functions (you don't need this but it makes things a lot faster!
-#
-
-
 class DatasetType(enum.Enum):
     IWSLT = 0,
     WMT14 = 1
@@ -26,6 +21,11 @@ class DatasetType(enum.Enum):
 class LanguageDirection(enum.Enum):
     E2G = 0,
     G2E = 1
+
+
+#
+# Caching mechanism datasets and functions (you don't need this but it makes things a lot faster!
+#
 
 
 class FastTranslationDataset(Dataset):
@@ -110,7 +110,6 @@ def save_cache(cache_path, dataset):
 
 
 # todo: add BPE
-# todo: try first with this smaller dataset latter add support for WMT-14 as well
 def get_datasets_and_vocabs(dataset_path, language_direction, use_iwslt=True, use_caching_mechanism=True):
     german_to_english = language_direction == LanguageDirection.G2E.name
     spacy_de = spacy.load('de_core_news_sm')

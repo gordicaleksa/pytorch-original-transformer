@@ -80,7 +80,7 @@ if __name__ == "__main__":
     parser.add_argument("--beam_size", type=int, help="used only in case decoding method is chosen", default=4)
     parser.add_argument("--length_penalty_coefficient", type=int, help="length penalty for the beam search", default=0.6)
 
-    parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=True)
+    parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=False)
 
     # Leave this the same as in the training script - used to reconstruct the field processors
     parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))

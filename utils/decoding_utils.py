@@ -27,23 +27,39 @@ def get_beam_decoder(translation_config):
         pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
 
         # Initial prompt is the beginning/start of the sentence token. Make it compatible shape with source batch => (B,1)
-        target_sentences_tokens = [[BOS_TOKEN] for _ in range(src_representations_batch.shape[0])]
+        batch_size = src_representations_batch.shape[0]
+        target_sentences_tokens = [[BOS_TOKEN] for _ in range(batch_size)]
         trg_token_ids_batch = torch.tensor([[trg_field_processor.vocab.stoi[tokens[0]]] for tokens in target_sentences_tokens], device=device)
 
-        hypothesis_probs = torch.zeros((beam_size, 1), device=device)
+        # todo: repeat so that sentence is repeated contiguously
+        src_representations_batch = src_representations_batch.repeat(beam_size, 1, 1)
+        trg_token_ids_batch = trg_token_ids_batch.repeat(beam_size, 1)
+
+        hypothesis_log_probs = torch.zeros((batch_size * beam_size, 1), device=device)
 
         while True:
             trg_mask, _ = get_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
+            # Shape = (B*BS*T, V) T - current token-sequence length, V - target vocab size, BS - beam size, B - batch
             predicted_log_distributions = baseline_transformer.decode(trg_token_ids_batch, src_representations_batch, trg_mask, src_mask)
 
-            log_probs, indices = torch.topk(predicted_log_distributions, beam_size, dim=-1, sorted=True)
+            # Extract only the indices of last token for every target sentence (we take every T-th token)
+            num_of_trg_tokens = len(target_sentences_tokens[0])
+            predicted_log_distributions = predicted_log_distributions[num_of_trg_tokens - 1::num_of_trg_tokens]
 
-            new_probs = hypothesis_probs + log_probs
-            _, new_indices = torch.topk(new_probs.flatten(), beam_size)
+            # This time extract beam_size number of highest probability tokens (compare to greedy's arg max)
+            latest_token_log_probs, most_probable_token_indices = torch.topk(predicted_log_distributions, beam_size, dim=-1, sorted=True)
 
-            i = np.array(np.unravel_index(new_indices.cpu().numpy(), new_probs.cpu().numpy().shape)).T
+            # Calculate probabilities for every beam hypothesis (since we have log prob we add instead of multiply)
+            # Shape = (BS*B, BS)
+            hypothesis_pool_log_probs = hypothesis_log_probs + latest_token_log_probs
+            hypothesis_pool_log_probs = hypothesis_pool_log_probs.view(batch_size, beam_size, beam_size)
 
-            indices_np = indices.cpu().numpy()
+            # Figure out indices of beam_size most probably hypothesis
+            _, new_indices = torch.topk(hypothesis_pool_log_probs.flatten(), beam_size)
+
+            i = np.array(np.unravel_index(new_indices.cpu().numpy(), hypothesis_pool_log_probs.cpu().numpy().shape)).T
+
+            indices_np = most_probable_token_indices.cpu().numpy()
             new_words_indices = indices_np[i]
             new_words = [trg_field_processor.vocab.itos[i] for i in new_words_indices]
 

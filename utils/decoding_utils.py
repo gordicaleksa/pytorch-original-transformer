@@ -80,11 +80,18 @@ def greedy_decoding(baseline_transformer, src_representations_batch, src_mask, t
     return target_sentences_tokens_post
 
 
-# https://arxiv.org/pdf/1609.08144.pdf introduces various heuristics into the beam search algorithm like coverage
-# penalty, etc. Here I only designed a simple beam search algorithm with length penalty. As the probability of the
-# sequence is constructed by multiplying the conditional probabilities (which are numbers smaller than 1) the beam
-# search algorithm will prefer shorter sentences which we compensate for using the length penalty.
 def get_beam_decoder(translation_config):
+    """
+    Note: this implementation could probably be further optimized I just wanted a decent working version.
+
+    Notes:
+
+    https://arxiv.org/pdf/1609.08144.pdf introduces various heuristics into the beam search algorithm like coverage
+    penalty, etc. Here I only designed a simple beam search algorithm with length penalty. As the probability of the
+    sequence is constructed by multiplying the conditional probabilities (which are numbers smaller than 1) the beam
+    search algorithm will prefer shorter sentences which we compensate for using the length penalty.
+
+    """
     beam_size = translation_config['beam_size']
     length_penalty_coefficient = translation_config['length_penalty_coefficient']
 
@@ -104,7 +111,8 @@ def get_beam_decoder(translation_config):
         trg_token_ids_batch = trg_token_ids_batch.repeat(beam_size, 1)
 
         hypotheses_log_probs = torch.zeros((batch_size * beam_size, 1), device=device)
-        had_eos = [False] * hypotheses_log_probs.shape[0]
+        had_eos = [[False] for _ in range(hypotheses_log_probs.shape[0])]
+
         while True:
             trg_mask, _ = get_masks_and_count_tokens_trg(trg_token_ids_batch, pad_token_id)
             # Shape = (B*BS*T, V) T - current token-sequence length, V - target vocab size, BS - beam size, B - batch
@@ -119,6 +127,9 @@ def get_beam_decoder(translation_config):
             # Shape = (B*BS, BS)
             latest_token_log_probs, most_probable_token_indices = torch.topk(predicted_log_distributions, beam_size, dim=-1, sorted=True)
 
+            # Don't update the hypothesis which had EOS already (pruning)
+            latest_token_log_probs.masked_fill(torch.tensor(had_eos == True), float("-inf"))
+
             # Calculate probabilities for every beam hypothesis (since we have log prob we add instead of multiply)
             # Shape = (B*BS, BS)
             hypotheses_pool_log_probs = hypotheses_log_probs + latest_token_log_probs
@@ -130,7 +141,7 @@ def get_beam_decoder(translation_config):
 
             # Figure out indices of beam_size most probably hypothesis for every target sentence in the batch
             # Shape = (B, BS)
-            new_hypothesis_log_probs, next_hypothesis_indices = torch.topk(hypotheses_pool_log_probs, beam_size, dim=-1)
+            new_hypothesis_log_probs, next_hypothesis_indices = torch.topk(hypotheses_pool_log_probs, beam_size, dim=-1, sorted=True)
 
             # Create new target ids batch
             hypotheses_log_probs_tmp = torch.empty((batch_size * beam_size, 1))
@@ -145,14 +156,16 @@ def get_beam_decoder(translation_config):
                     row, column = token_index / beam_size, token_index % beam_size
                     hypothesis_index = b_idx * beam_size + h_idx
 
-                    new_trg_token_ids_batch[hypothesis_index, :-1] = trg_token_ids_batch[b_idx * beam_size + row, :]
                     new_token_id = most_probable_token_indices[b_idx, row, column]
-                    new_trg_token_ids_batch[hypothesis_index, -1] = new_token_id
+                    if had_eos[hypothesis_index]:
+                        new_trg_token_ids_batch[hypothesis_index, :-1] = trg_token_ids_batch[hypothesis_index, :]
+                    else:
+                        new_trg_token_ids_batch[hypothesis_index, :-1] = trg_token_ids_batch[b_idx * beam_size + row, :]
+                        new_trg_token_ids_batch[hypothesis_index, -1] = new_token_id
 
-                    if had_eos[hypothesis_index] and row == h_idx:  # if it was overwritten it was overwritten by itself
+                    if had_eos[hypothesis_index]:
                         hypotheses_log_probs_tmp[hypothesis_index] = hypotheses_log_probs[hypothesis_index]
                     else:
-                        had_eos[hypothesis_index] = False  # set to False in case this hypothesis index was overwritten
                         hypotheses_log_probs_tmp[hypothesis_index] = new_hypothesis_log_probs[hypothesis_index]
 
                     if new_token_id == trg_field_processor.vocab.stoi[EOS_TOKEN]:

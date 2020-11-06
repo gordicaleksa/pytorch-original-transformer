@@ -35,7 +35,7 @@ def visualize_label_smoothing():
     pad_token_id = 0  # index 0 of the vocab corresponds to the pad token
     trg_vocab_size = 4  # assume only 4 words in our vocab - a toy example
 
-    smooth = LabelSmoothingDistribution(smoothing_value=0.1, pad_token_id=pad_token_id, trg_vocab_size=trg_vocab_size)
+    smooth = LabelSmoothingDistribution(smoothing_value=0.1, pad_token_id=pad_token_id, trg_vocab_size=trg_vocab_size, device='cpu')
     one_hot = OneHotDistribution(pad_token_id=pad_token_id, trg_vocab_size=trg_vocab_size)
 
     target = torch.tensor([[1], [2], [3], [0]])

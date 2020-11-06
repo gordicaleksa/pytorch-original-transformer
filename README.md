@@ -10,7 +10,7 @@ It's aimed at making it **easy for beginners** to start playing and learning abo
   * [Machine translation](#machine-translation)
   * [Setup](#setup)
   * [Usage](#usage)
-  * [HW requirements for training](#hardware-requirements)
+  * [Hardware requirements](#hardware-requirements)
 
 ## What are transformers
 
@@ -92,24 +92,33 @@ Transformer was originally trained on the NMT (neural machine translation) task 
 * English to German translations (achieved 28.4 [BLEU score](https://en.wikipedia.org/wiki/BLEU))
 * English to French translations (achieved 41.8 BLEU score)
  
-What I did (for now) is I trained my models on IWSLT which is much smaller and I trained my models to translate
-from English to German and vice versa, as I speak those 2 so it's easier to debug.
+What I did (for now) is I trained my models on the IWSLT dataset, which is much smaller, for the
+English-German language pair, as I speak those 2 languages so it's easier to debug and play around.
 
-I will train WMT-14 models soon, take a look at the [todos](#todos) section.
+I'll also train on WMT-14 models soon, take a look at the [todos](#todos) section.
 
-Anyways! Let's see what this repo can practically do for you! Well it can translate from one human language into another!
+---
 
-Some short outputs from my German to English model:
-I input: `Ich bin ein guter Mensch, denke ich.` <br/>
-and I get out: `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']`
+Anyways! Let's see what this repo can practically do for you! Well it can translate!
+
+Some short translations from my German to English IWSLT model:
+Input: `Ich bin ein guter Mensch, denke ich.` () <br/>
+Output: `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']` <br/>
 
 Which is actually pretty good!
 
-There are of course failure cases like:
-I input: `Ich bin ein Berliner` <br/>
-and I get back: ``
+---
 
-Similarly for the English2German model, I'll link fully trained models down in the [usage](#usage) section.
+There are of course failure cases like this:
+Input: `Hey Alter, wie geht es dir?` (How is it going dude?) <br/>
+Output: `['<s>', 'Hey', ',', 'age', 'how', 'are', 'you', '?', '</s>']` <br/>
+or in human-readable format: `Hey, age, how are you?` <br/>
+
+Which is actually also not completely bad! Because:
+* First of all the model was trained on IWSLT (TED like conversations)
+* "Alter" is a colloquial expression for old buddy/dude/mate but it's literal meaning is indeed age.
+
+Similarly for the English to German model.
 
 ## Setup
 
@@ -138,6 +147,8 @@ Current results, models were trained for 20 epochs (DE stands for Deutch i.e. Ge
 | Baseline transformer (EN-DE) | x | WMT-14 val |
 | Baseline transformer (DE-EN) | x | WMT-14 val |
 
+I got these using greedy decoding so it's a pessimistic estimate, I'll add beam decoding [soon.](#todos)
+
 **Important note:** Initialization matters a lot for the transformer! I initially thought that other implementations
 using Xavier initialization is again one of those arbitrary heuristics and that PyTorch default init will do - I was wrong:
 
@@ -149,6 +160,7 @@ You can see here 3 runs, the 2 lower ones used PyTorch default initialization (o
 loss and the better one used `batchmean`), whereas the upper one used **Xavier uniform** initialization!
  
 ---
+
 Idea: you could potentially also periodically dump translations for a reference batch of source sentences. <br/>
 That would give you some qualitative insight into how the transformer is doing, although I didn't do that. <br/>
 A similar thing is done when you have hard time quantitatively evaluating your model like in [GANs](https://github.com/gordicaleksa/pytorch-gans) and [NST](https://github.com/gordicaleksa/pytorch-nst-feedforward) fields.

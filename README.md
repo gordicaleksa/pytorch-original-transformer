@@ -129,7 +129,7 @@ I tracked 3 curves while training:
 [BLEU is an n-gram based metric](https://www.aclweb.org/anthology/P02-1040.pdf) for quantitatively evaluating the quality of machine translation models. <br/>
 I used the BLEU-4 metric provided by the awesome **nltk** Python module.
 
-Current results, models were trained for 20 epochs:
+Current results, models were trained for 20 epochs (DE stands for Deutch i.e. German in German :nerd_face:):
 
 | Model | BLEU score | Dataset |
 | --- | --- | --- |
@@ -148,6 +148,7 @@ using Xavier initialization is again one of those arbitrary heuristics and that 
 You can see here 3 runs, the 2 lower ones used PyTorch default initialization (one used `mean` for KL divergence
 loss and the better one used `batchmean`), whereas the upper one used **Xavier uniform** initialization!
  
+---
 Idea: you could potentially also periodically dump translations for a reference batch of source sentences. <br/>
 That would give you some qualitative insight into how the transformer is doing, although I didn't do that. <br/>
 A similar thing is done when you have hard time quantitatively evaluating your model like in [GANs](https://github.com/gordicaleksa/pytorch-gans) and [NST](https://github.com/gordicaleksa/pytorch-nst-feedforward) fields.

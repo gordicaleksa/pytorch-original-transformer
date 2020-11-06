@@ -10,7 +10,7 @@ It's aimed at making it **easy for beginners** to start playing and learning abo
   * [Machine translation](#machine-translation)
   * [Setup](#setup)
   * [Usage](#usage)
-  * [HW requirements for training](#hw-requirements-for-training)
+  * [HW requirements for training](#hardware-requirements)
 
 ## What are transformers
 
@@ -128,6 +128,27 @@ Training the German->English transformer on IWSLT for 20 epochs I got BLEU of .
 Initialization matters! Show BLEU curves from my Azure ML runs: 
 
 ### Visualizing attention
+
+You can use the `translation_script.py` and set the `--visualize_attention` to True to additionally understand what your
+model was "paying attention to" in the source and target sentences.
+
+Here are the attentions I get for the input sentence `Ich bin ein guter Mensch, denke ich.`.
+
+<p align="center">
+<img src="data/readme_pics/attention_enc_self.PNG" width="850"/>
+</p>
+
+These belong to layer 4 of the encoder. You can see all of the 8 multi-head attention heads.
+
+<p align="center">
+<img src="data/readme_pics/attention_dec_self.PNG" width="850"/>
+</p>
+
+And this one belongs to layer 1 of the decoder. You can notice an interesting **triangular pattern** which 
+comes from the fact that target tokens can't look ahead!
+
+The 3rd type of MHA (multi-head attention) module is the source attending one but it looks similar to the
+plot you saw in the encoder.
 
 ## Hardware requirements
 

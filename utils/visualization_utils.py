@@ -32,7 +32,7 @@ def visualize_attention(baseline_transformer, source_sentence_tokens, target_sen
     decoder = baseline_transformer.decoder
 
     # Remove the end of sentence token </s> as we never attend to it, it's produced at the output and we stop
-    target_sentence_tokens = target_sentence_tokens[:-1]
+    target_sentence_tokens = target_sentence_tokens[0][:-1]
 
     # Visualize encoder attention weights
     for layer_id, encoder_layer in enumerate(encoder.encoder_layers):

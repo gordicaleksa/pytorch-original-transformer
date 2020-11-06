@@ -122,22 +122,27 @@ link to my models
 ### Evaluating NMT models (BLEU metric)
 
 I tracked 3 curves while training:
-1) training loss (KL divergence, batchmean)
-2) validation loss (KL divergence, batchmean)
-3) BLEU-4 
+* training loss (KL divergence, batchmean)
+* validation loss (KL divergence, batchmean)
+* BLEU-4 
 
-[BLEU is an n-gram based metric](https://www.aclweb.org/anthology/P02-1040.pdf) for quantitatively evaluating the quality of machine translation models.
+[BLEU is an n-gram based metric](https://www.aclweb.org/anthology/P02-1040.pdf) for quantitatively evaluating the quality of machine translation models. <br/>
 I used the BLEU-4 metric provided by the awesome **nltk** Python module.
 
-Current results on IWSLT, models were trained for 20 epochs, BLEU was evaluated on IWSLT val dataset.
-English to German:
-German to English: 33.2
+Current results, models were trained for 20 epochs:
+
+| Model | BLEU score | Dataset |
+| --- | --- | --- |
+| Baseline transformer (EN-DE) | x | IWSLT val |
+| Baseline transformer (DE-EN) | **33.2** | IWSLT val |
+| Baseline transformer (EN-DE) | x | WMT-14 val |
+| Baseline transformer (DE-EN) | x | WMT-14 val |
 
 **Important note:** Initialization matters a lot for the transformer! I initially thought that other implementations
 using Xavier initialization is again one of those arbitrary heuristics and that PyTorch default init will do - I was wrong:
 
 <p align="center">
-<img src="data/readme_pics/bleu_score_xavier_vs_default_pt_init.PNG" width="700"/>
+<img src="data/readme_pics/bleu_score_xavier_vs_default_pt_init.PNG" width="450"/>
 </p>
 
 You can see here 3 runs, the 2 lower ones used PyTorch default initialization (one used `mean` for KL divergence

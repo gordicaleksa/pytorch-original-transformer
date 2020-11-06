@@ -2,10 +2,12 @@
 This repo contains PyTorch implementation of the original transformer paper (:link: [Vaswani et al.](https://arxiv.org/pdf/1706.03762.pdf)). <br/>
 It's aimed at making it **easy for beginners** to start playing and learning about transformers. <br/>
 
+**Important note:** I'll be adding a jupyter notebook soon as well!
+
 ## Table of Contents
   * [What are transformers?](#what-are-transformers)
   * [Understanding transformers](#understanding-transformers)
-  * [machine translation - examples](#machine-translation-examples)
+  * [Machine translation](#machine-translation)
   * [Setup](#setup)
   * [HW requirements for training](#hw-requirements-for-training)
 
@@ -15,8 +17,7 @@ Transformers were originally proposed by Vaswani et al. in a seminal paper calle
 
 You probably heard of transformers one way or another. **GPT-3 and BERT** to name a few well known ones :unicorn:. The main idea
 is that they showed that you don't have to use recurrent or convolutional layers and that simple architecture coupled with attention is super powerful. It
-gave the benefit of **much better long-range dependencies modeling** and the architecture itself is very **parallelizable** (:computer::computer::computer:) which leads to higher compute efficiency
-(which is tremendously important).
+gave the benefit of **much better long-range dependencies modeling** and the architecture itself is very **parallelizable** (:computer::computer::computer:) which leads to higher compute efficiency!
 
 Here is how their beautifully simple architecture looks like:
 
@@ -65,6 +66,8 @@ Noup? So I thought, here it is visualized:
 It's super easy to understand now. Now whether this part was crucial for the success of transformer? I doubt it.
 But it's cool and makes things more complicated. :nerd_face:
 
+*Note: model dimension is basically the size of the embedding vector, baseline transformer used 512, the big one 1024*
+
 ### Label Smoothing
 
 First time you hear of label smoothing it sounds tough but it's not. You usually set your target vocabulary distribution
@@ -76,7 +79,11 @@ to a `one-hot`. Meaning 1 position out of 30k (or whatever your vocab size is) i
 
 In label smoothing instead of placing 1. on that particular position you place say 0.9 and you evenly distribute the rest of
 the "probability mass" over the other positions 
-(that's the visualized as a different shade of purple on the image above in a fictional vocab of size 4 - hence 4 columns)
+(that's visualized as a different shade of purple on the image above in a fictional vocab of size 4 - hence 4 columns)
+
+*Note: Pad token's distribution is set to all zeros as we don't want our model to predict those!*
+
+Aside from this repo (well duh) I would highly recommend you go ahead and read [this amazing blog](https://jalammar.github.io/illustrated-transformer/) by Jay Alammar!
 
 ## Machine translation
 
@@ -89,7 +96,7 @@ Anyways! Let's see what this repo can practically do for you? Well it can transl
 Concretely I experimented with **German-English** pair as I speak those 2 so it's easier to debug.
 
 Examples outputs of my German->English model:
-* I input `Ich bin ein guter Mensch, denke ich.` and I get out '['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']'
+* I input `Ich bin ein guter Mensch, denke ich.` and I get out `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']`
 
 Which is actually pretty good!
 
@@ -100,6 +107,19 @@ What is BLEU - short description.
 Training the German->English transformer on IWSLT for 20 epochs I got BLEU of .
 
 ### Visualizing attention
+
+
+## HW requirements
+
+This section naturally leads to the next section.
+
+### todos
+* Add multi-GPU/multi-node support
+* Add beam decoding
+
+### My videos
+
+## Acknoweldgements
 
 
 ## Citation

@@ -17,7 +17,7 @@ def translate_a_single_sentence(translation_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare the field processor (tokenizer, numericalizer)
-    _, _, src_field_processor, trg_field_processor = get_datasets_and_vocabs(translation_config['dataset_path'], translation_config['language_direction'], translation_config['dataset_name'] == DatasetType.IWSLT.name)
+    _, _, src_field_processor, trg_field_processor = get_datasets_and_vocabs(translation_config['language_direction'], translation_config['dataset_name'] == DatasetType.IWSLT.name)
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # needed for constructing masks
 
@@ -72,18 +72,18 @@ if __name__ == "__main__":
     #
     parser = argparse.ArgumentParser()
     parser.add_argument("--source_sentence", type=str, help="source sentence to translate into target", default="Ich bin ein guter Mensch, denke ich.")
+    parser.add_argument("--model_name", type=str, help="transformer model name", default=r'run19_transformer_000000.pth')
+
+    # Keep these 2 in sync with the model you pick via model_name
     parser.add_argument("--dataset_name", type=str, choices=['IWSLT', 'WMT14'], help='which dataset to use for training', default=DatasetType.IWSLT.name)
-    parser.add_argument("--model_name", type=str, help="transformer model name", default=r'transformer_000000.pth')
     parser.add_argument("--language_direction", type=str, choices=[el.name for el in LanguageDirection], help='which direction to translate', default=LanguageDirection.G2E.name)
 
+    # Decoding related args
     parser.add_argument("--decoding_method", type=str, help="pick between different decoding methods", default=DecodingMethod.GREEDY)
     parser.add_argument("--beam_size", type=int, help="used only in case decoding method is chosen", default=4)
     parser.add_argument("--length_penalty_coefficient", type=int, help="length penalty for the beam search", default=0.6)
 
     parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=False)
-
-    # Leave this the same as in the training script - used to reconstruct the field processors
-    parser.add_argument("--dataset_path", type=str, help='save dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
     args = parser.parse_args()
 
     # Wrapping training configuration into a dictionary

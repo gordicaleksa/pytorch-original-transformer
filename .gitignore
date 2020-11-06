@@ -4,6 +4,10 @@ __pycache__
 
 # This is where torch text datasets like IWSLT and WMT14 will be downloaded to
 .data
+data/*.csv
+data/iwslt
+data/wikitext-2
+data/wmt14
 
 # Jupyter notebook checkpoints
 .ipynb_checkpoints

@@ -105,7 +105,7 @@ def train_transformer(training_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU, I hope so!
 
     # Step 1: Prepare data loaders
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['dataset_path'], training_config['language_direction'], training_config['dataset_name'], training_config['batch_size'], device)
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(training_config['language_direction'], training_config['dataset_name'], training_config['batch_size'], device)
 
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # pad token id is the same for target as well
     src_vocab_size = len(src_field_processor.vocab)
@@ -122,7 +122,7 @@ def train_transformer(training_config):
     ).to(device)
 
     # Step 3: Prepare other training related utilities
-    kl_div_loss = nn.KLDivLoss(reduction='mean')
+    kl_div_loss = nn.KLDivLoss(reduction='batchmean')  # gives better BLEU score than "mean"
 
     # Makes smooth target distributions as opposed to conventional one-hot distributions
     # My feeling is that this is a really dummy and arbitrary heuristic but time will tell.
@@ -162,12 +162,14 @@ if __name__ == "__main__":
     # Modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
     #
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=5)
+    # According to the paper I infered that the baseline was trained for 20 epochs on the WMT-14 dataset and I got
+    # nice returns up to epoch 20 on IWSLT as well
+    parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=20)
     # You should adjust this for your particular machine (I have RTX 2080 with 8 GBs of VRAM so this fits nicely!)
     parser.add_argument("--batch_size", type=int, help="target number of tokens in a src/trg batch", default=1500)
-    parser.add_argument("--dataset_path", type=str, help='download dataset to this path', default=os.path.join(os.path.dirname(__file__), '.data'))
-    parser.add_argument("--dataset_name", choices=[el.name for el in DatasetType], help='which dataset to use for training', default=DatasetType.IWSLT.name)
 
+    # Data related args
+    parser.add_argument("--dataset_name", choices=[el.name for el in DatasetType], help='which dataset to use for training', default=DatasetType.IWSLT.name)
     parser.add_argument("--language_direction", choices=[el.name for el in LanguageDirection], help='which direction to translate', default=LanguageDirection.E2G.name)
 
     # Logging/debugging/checkpoint related (helps a lot with experimentation)

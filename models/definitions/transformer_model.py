@@ -55,6 +55,7 @@ class Transformer(nn.Module):
         # Potentially add special initialization (not mentioned in the paper, other implementations use xavier)
         # It'd be useful to see whether we gain anything from doing xavier over default PyTorch initialization
         if not default_initialization:
+            print('*' * 5, 'Custom init')
             for name, p in self.named_parameters():
                 if p.dim() > 1:
                     nn.init.xavier_uniform_(p)

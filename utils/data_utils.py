@@ -10,7 +10,7 @@ from torchtext import datasets
 import spacy
 
 
-from .constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN
+from .constants import BOS_TOKEN, EOS_TOKEN, PAD_TOKEN, DATA_DIR_PATH
 
 
 class DatasetType(enum.Enum):
@@ -110,7 +110,7 @@ def save_cache(cache_path, dataset):
 
 
 # todo: add BPE
-def get_datasets_and_vocabs(dataset_path, language_direction, use_iwslt=True, use_caching_mechanism=True):
+def get_datasets_and_vocabs(language_direction, use_iwslt=True, use_caching_mechanism=True):
     german_to_english = language_direction == LanguageDirection.G2E.name
     spacy_de = spacy.load('de_core_news_sm')
     spacy_en = spacy.load('en_core_web_sm')
@@ -135,9 +135,9 @@ def get_datasets_and_vocabs(dataset_path, language_direction, use_iwslt=True, us
     # Only call once the splits function it is super slow as it constantly has to redo the tokenization
     prefix = 'de_en' if german_to_english else 'en_de'
     prefix += '_iwslt' if use_iwslt else '_wmt14'
-    train_cache_path = os.path.join(dataset_path, f'{prefix}_train_cache.csv')
-    val_cache_path = os.path.join(dataset_path, f'{prefix}_val_cache.csv')
-    test_cache_path = os.path.join(dataset_path, f'{prefix}_test_cache.csv')
+    train_cache_path = os.path.join(DATA_DIR_PATH, f'{prefix}_train_cache.csv')
+    val_cache_path = os.path.join(DATA_DIR_PATH, f'{prefix}_val_cache.csv')
+    test_cache_path = os.path.join(DATA_DIR_PATH, f'{prefix}_test_cache.csv')
 
     # This simple caching mechanism gave me ~30x speedup on my machine! From ~70s -> ~2.5s!
     ts = time.time()
@@ -152,7 +152,7 @@ def get_datasets_and_vocabs(dataset_path, language_direction, use_iwslt=True, us
         train_dataset, val_dataset, test_dataset = dataset_split_fn(
             exts=(src_ext, trg_ext),
             fields=fields,
-            root=dataset_path,
+            root=DATA_DIR_PATH,
             filter_pred=filter_pred
         )
 
@@ -220,8 +220,8 @@ def batch_size_fn(new_example, count, sofar):
 
 # https://github.com/pytorch/text/issues/536#issuecomment-719945594 <- there is a "bug" in BucketIterator i.e. it's
 # description is misleading as it won't group examples of similar length unless you set sort_within_batch to True!
-def get_data_loaders(dataset_path, language_direction, dataset_name, batch_size, device):
-    train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(dataset_path, language_direction, dataset_name == DatasetType.IWSLT.name)
+def get_data_loaders(language_direction, dataset_name, batch_size, device):
+    train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(language_direction, dataset_name == DatasetType.IWSLT.name)
 
     # using default sorting function which
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
@@ -327,10 +327,9 @@ if __name__ == "__main__":
     # without me having to add sys.path stuff, if you have a more elegant solution please open an issue <3
     batch_size = 8
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset_path = os.path.join(os.path.dirname(__file__), os.pardir, '.data')
     dataset_name = DatasetType.IWSLT.name
     language_direction = LanguageDirection.G2E.name
-    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(dataset_path, language_direction, dataset_name, batch_size, device)
+    train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor = get_data_loaders(language_direction, dataset_name, batch_size, device)
 
     # Verify that the mask logic is correct
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]

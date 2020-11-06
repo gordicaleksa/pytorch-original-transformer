@@ -102,11 +102,11 @@ I'll also train my models on WMT-14 soon, take a look at the [todos](#todos) sec
 Anyways! Let's see what this repo can practically do for you! Well it can translate!
 
 Some short translations from my German to English IWSLT model: <br/>
-Input: `Ich bin ein guter Mensch, denke ich.` () <br/>
+Input: `Ich bin ein guter Mensch, denke ich.` ("gold": I am a good person I think) <br/>
 Output: `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']` <br/>
 or in human-readable format: `I think I'm a good person.`
 
-Which is actually pretty good!
+Which is actually pretty good! Maybe even better IMO than Google Translate's "gold" translation.
 
 ---
 
@@ -124,23 +124,29 @@ Similarly for the English to German model.
 ## Setup
 
 So we talked about what transformers are, and what they can do for you (among other things). <br/>
-Let's get this thing running! Steps:
+Let's get this thing running! Follow the next steps:
 
 1. `git clone https://github.com/gordicaleksa/pytorch-original-transformer`
 2. Open Anaconda console and navigate into project directory `cd path_to_repo`
 3. Run `conda env create` from project directory (this will create a brand new conda environment).
 4. Run `activate pytorch-transformer` (for running scripts from your console or set the interpreter in your IDE)
 
-That's it! It should work out-of-the-box executing environment.yml file which deals with dependencies.
+That's it! It should work out-of-the-box executing environment.yml file which deals with dependencies. <br/>
+It may take a while as I'm automatically downloading SpaCy's statistical models for English and German.
 
 -----
 
-PyTorch package will pull some version of CUDA with it, but it is highly recommended that you install system-wide CUDA beforehand, mostly because of GPU drivers. I also recommend using Miniconda installer as a way to get conda on your system. 
-
-Follow through points 1 and 2 of [this setup](https://github.com/Petlja/PSIML/blob/master/docs/MachineSetup.md) and use the most up-to-date versions of Miniconda and CUDA/cuDNN.
-
+PyTorch pip package will come bundled with some version of CUDA/cuDNN with it,
+but it is highly recommended that you install a system-wide CUDA beforehand, mostly because of the GPU drivers. 
+I also recommend using Miniconda installer as a way to get conda on your system.
+Follow through points 1 and 2 of [this setup](https://github.com/Petlja/PSIML/blob/master/docs/MachineSetup.md)
+and use the most up-to-date versions of Miniconda and CUDA/cuDNN for your system.
 
 ## Usage
+
+### Training
+
+Just run the `training_script` it will initially take some time to download the dataset automatically.
 
 link to my models
 
@@ -231,7 +237,7 @@ I could have pushed K80s to 3500+ tokens/batch but had some CUDA out of memory p
 Finally there are a couple more todos which I'll hopefully add really soon:
 * Multi-GPU/multi-node training support (so that you can train a model on WMT-14 for 19 epochs)
 * Beam decoding (turns out it's not that easy to implement this one!)
-* BPE and shared source-target vocab
+* BPE and shared source-target vocab (I'm using SpaCy now)
 
 ## Video learning material
 

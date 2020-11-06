@@ -88,28 +88,29 @@ Aside from this repo (well duh) I would highly recommend you go ahead and read [
 
 ## Machine translation
 
-Transformer was originally trained on the NMT (neural machine translation) task on the WMT-14 dataset for:
-* English to German translations (achieved 28.4 [BLEU score](https://en.wikipedia.org/wiki/BLEU))
-* English to French translations (achieved 41.8 BLEU score)
+Transformer was originally trained for the NMT (neural machine translation) task on the [WMT-14 dataset](https://torchtext.readthedocs.io/en/latest/datasets.html#wmt14) for:
+* English to German translation task (achieved 28.4 [BLEU score](https://en.wikipedia.org/wiki/BLEU))
+* English to French translation task (achieved 41.8 BLEU score)
  
-What I did (for now) is I trained my models on the IWSLT dataset, which is much smaller, for the
-English-German language pair, as I speak those 2 languages so it's easier to debug and play around.
+What I did (for now) is I trained my models on the [IWSLT dataset](https://torchtext.readthedocs.io/en/latest/datasets.html#iwslt), which is much smaller, for the
+English-German language pair, as I speak those languages so it's easier to debug and play around.
 
-I'll also train on WMT-14 models soon, take a look at the [todos](#todos) section.
+I'll also train my models on WMT-14 soon, take a look at the [todos](#todos) section.
 
 ---
 
 Anyways! Let's see what this repo can practically do for you! Well it can translate!
 
-Some short translations from my German to English IWSLT model:
+Some short translations from my German to English IWSLT model: <br/>
 Input: `Ich bin ein guter Mensch, denke ich.` () <br/>
 Output: `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']` <br/>
+or in human-readable format: `I think I'm a good person.`
 
 Which is actually pretty good!
 
 ---
 
-There are of course failure cases like this:
+There are of course failure cases like this: <br/>
 Input: `Hey Alter, wie geht es dir?` (How is it going dude?) <br/>
 Output: `['<s>', 'Hey', ',', 'age', 'how', 'are', 'you', '?', '</s>']` <br/>
 or in human-readable format: `Hey, age, how are you?` <br/>
@@ -122,6 +123,21 @@ Similarly for the English to German model.
 
 ## Setup
 
+So we talked about what transformers are, and what they can do for you (among other things). <br/>
+Let's get this thing running! Steps:
+
+1. `git clone https://github.com/gordicaleksa/pytorch-original-transformer`
+2. Open Anaconda console and navigate into project directory `cd path_to_repo`
+3. Run `conda env create` from project directory (this will create a brand new conda environment).
+4. Run `activate pytorch-transformer` (for running scripts from your console or set the interpreter in your IDE)
+
+That's it! It should work out-of-the-box executing environment.yml file which deals with dependencies.
+
+-----
+
+PyTorch package will pull some version of CUDA with it, but it is highly recommended that you install system-wide CUDA beforehand, mostly because of GPU drivers. I also recommend using Miniconda installer as a way to get conda on your system. 
+
+Follow through points 1 and 2 of [this setup](https://github.com/Petlja/PSIML/blob/master/docs/MachineSetup.md) and use the most up-to-date versions of Miniconda and CUDA/cuDNN.
 
 
 ## Usage

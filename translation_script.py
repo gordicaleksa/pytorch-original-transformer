@@ -10,6 +10,8 @@ from utils.data_utils import get_datasets_and_vocabs, get_masks_and_count_tokens
 from utils.constants import *
 from utils.visualization_utils import visualize_attention
 from utils.decoding_utils import greedy_decoding, get_beam_decoder, DecodingMethod
+from utils.utils import print_model_metadata
+from utils.resource_downloader import download_models
 
 
 # Super easy to add translation for a batch of sentences passed as a .txt file for example
@@ -37,9 +39,12 @@ def translate_a_single_sentence(translation_config):
     ).to(device)
 
     model_path = os.path.join(BINARIES_PATH, translation_config['model_name'])
-    assert os.path.exists(model_path), f'Could not find the model {model_path}. You first need to train the transformer.'
+    if not os.path.exists(model_path):
+        print(f'Model {model_path} does not exist, attempting to download.')
+        model_path = download_models(translation_config)
 
     model_state = torch.load(model_path)
+    print_model_metadata(model_state)
     baseline_transformer.load_state_dict(model_state["state_dict"], strict=True)
     baseline_transformer.eval()
 
@@ -77,7 +82,7 @@ if __name__ == "__main__":
     #
     parser = argparse.ArgumentParser()
     parser.add_argument("--source_sentence", type=str, help="source sentence to translate into target", default="Ich bin ein guter Mensch, denke ich.")
-    parser.add_argument("--model_name", type=str, help="transformer model name", default=r'run19_transformer_000000.pth')
+    parser.add_argument("--model_name", type=str, help="transformer model name", default=r'run20_transformer_000000_xavier_init.pth')
 
     # Keep these 2 in sync with the model you pick via model_name
     parser.add_argument("--dataset_name", type=str, choices=['IWSLT', 'WMT14'], help='which dataset to use for training', default=DatasetType.IWSLT.name)
@@ -91,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--beam_size", type=int, help="used only in case decoding method is chosen", default=4)
     parser.add_argument("--length_penalty_coefficient", type=int, help="length penalty for the beam search", default=0.6)
 
-    parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=False)
+    parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=True)
     args = parser.parse_args()
 
     # Wrapping training configuration into a dictionary

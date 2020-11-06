@@ -46,6 +46,18 @@ def get_training_state(training_config, model):
     return training_state
 
 
+def print_model_metadata(training_state):
+    header = f'\n{"*"*5} Model training metadata: {"*"*5}'
+    print(header)
+
+    for key, value in training_state.items():
+        if key != 'state_dict':  # don't print state_dict it's a bunch of numbers...
+            if key == 'language_direction':  # convert into human readable format
+                value = 'English to German' if value == 'E2G' else 'German to English'
+            print(f'{key}: {value}')
+    print(f'{"*" * len(header)}\n')
+
+
 # Calculate the BLEU-4 score
 def calculate_bleu_score(transformer, token_ids_loader, trg_field_processor):
     with torch.no_grad():

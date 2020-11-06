@@ -26,7 +26,7 @@ from utils.constants import *
 # todo: consider sharing the embeddings as in the original paper
 class Transformer(nn.Module):
 
-    def __init__(self, model_dimension, src_vocab_size, trg_vocab_size, number_of_heads, number_of_layers, dropout_probability):
+    def __init__(self, model_dimension, src_vocab_size, trg_vocab_size, number_of_heads, number_of_layers, dropout_probability, log_attention_weights=False):
         super().__init__()
 
         # Embeds source/target token ids into embedding vectors
@@ -39,7 +39,7 @@ class Transformer(nn.Module):
         self.trg_pos_embedding = PositionalEncoding(model_dimension, dropout_probability)
 
         # All of these will get deep-copied multiple times internally
-        mha = MultiHeadedAttention(model_dimension, number_of_heads, dropout_probability)
+        mha = MultiHeadedAttention(model_dimension, number_of_heads, dropout_probability, log_attention_weights)
         pwn = PositionwiseFeedForwardNet(model_dimension, dropout_probability)
         encoder_layer = EncoderLayer(model_dimension, dropout_probability, mha, pwn)
         decoder_layer = DecoderLayer(model_dimension, dropout_probability, mha, pwn)
@@ -51,16 +51,14 @@ class Transformer(nn.Module):
         self.decoder_generator = DecoderGenerator(model_dimension, trg_vocab_size)
         self.init_params()
 
-    def init_params(self, default_initialization=True):
-        # Potentially add special initialization (not mentioned in the paper, other implementations use xavier)
-        # It'd be useful to see whether we gain anything from doing xavier over default PyTorch initialization
+    def init_params(self, default_initialization=False):
+        # Not mentioned in the paper, but other implementations used xavier.
+        # I tested both PyTorch's default initialization and this, and xavier has tremendous impact! I didn't expect
+        # a model's perf, with normalization layers, to be so much dependent on the choice of weight initialization.
         if not default_initialization:
-            print('*' * 5, 'Custom init')
             for name, p in self.named_parameters():
                 if p.dim() > 1:
                     nn.init.xavier_uniform_(p)
-                else:
-                    print(name)
 
     def forward(self, src_token_ids_batch, trg_token_ids_batch, src_mask, trg_mask):
         src_representations_batch = self.encode(src_token_ids_batch, src_mask)
@@ -294,7 +292,7 @@ class MultiHeadedAttention(nn.Module):
 
     """
 
-    def __init__(self, model_dimension, number_of_heads, dropout_probability):
+    def __init__(self, model_dimension, number_of_heads, dropout_probability, log_attention_weights):
         super().__init__()
         assert model_dimension % number_of_heads == 0, f'Model dimension must be divisible by the number of heads.'
 
@@ -307,6 +305,7 @@ class MultiHeadedAttention(nn.Module):
         self.attention_dropout = nn.Dropout(p=dropout_probability)  # no pun intended, not explicitly mentioned in paper
         self.softmax = nn.Softmax(dim=-1)  # -1 stands for apply the softmax along the last dimension
 
+        self.log_attention_weights = log_attention_weights  # should we log attention weights
         self.attention_weights = None  # for visualization purposes, I cache the weights here (translation_script.py)
 
     def attention(self, query, key, value, mask):
@@ -345,7 +344,12 @@ class MultiHeadedAttention(nn.Module):
                              for net, x in zip(self.qkv_nets, (query, key, value))]
 
         # Step 2: Apply attention - compare query with key and use that to combine values (see the function for details)
-        intermediate_token_representations, self.attention_weights = self.attention(query, key, value, mask)
+        intermediate_token_representations, attention_weights = self.attention(query, key, value, mask)
+
+        # Potentially, for visualization purposes, log the attention weights, turn off during training though!
+        # I had memory problems when I leave this on by default
+        if self.log_attention_weights:
+            self.attention_weights = attention_weights
 
         # Step 3: Reshape from (B, NH, S/T, HD) over (B, S/T, NH, HD) (via transpose) into (B, S/T, NHxHD) which is
         # the same shape as in the beginning of this forward function i.e. input to MHA (multi-head attention) module

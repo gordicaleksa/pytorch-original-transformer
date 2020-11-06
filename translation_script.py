@@ -17,7 +17,11 @@ def translate_a_single_sentence(translation_config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # checking whether you have a GPU
 
     # Step 1: Prepare the field processor (tokenizer, numericalizer)
-    _, _, src_field_processor, trg_field_processor = get_datasets_and_vocabs(translation_config['language_direction'], translation_config['dataset_name'] == DatasetType.IWSLT.name)
+    _, _, src_field_processor, trg_field_processor = get_datasets_and_vocabs(
+        translation_config['dataset_path'],
+        translation_config['language_direction'],
+        translation_config['dataset_name'] == DatasetType.IWSLT.name
+    )
     assert src_field_processor.vocab.stoi[PAD_TOKEN] == trg_field_processor.vocab.stoi[PAD_TOKEN]
     pad_token_id = src_field_processor.vocab.stoi[PAD_TOKEN]  # needed for constructing masks
 
@@ -28,7 +32,8 @@ def translate_a_single_sentence(translation_config):
         trg_vocab_size=len(trg_field_processor.vocab),
         number_of_heads=BASELINE_MODEL_NUMBER_OF_HEADS,
         number_of_layers=BASELINE_MODEL_NUMBER_OF_LAYERS,
-        dropout_probability=BASELINE_MODEL_DROPOUT_PROB
+        dropout_probability=BASELINE_MODEL_DROPOUT_PROB,
+        log_attention_weights=True
     ).to(device)
 
     model_path = os.path.join(BINARIES_PATH, translation_config['model_name'])
@@ -77,6 +82,9 @@ if __name__ == "__main__":
     # Keep these 2 in sync with the model you pick via model_name
     parser.add_argument("--dataset_name", type=str, choices=['IWSLT', 'WMT14'], help='which dataset to use for training', default=DatasetType.IWSLT.name)
     parser.add_argument("--language_direction", type=str, choices=[el.name for el in LanguageDirection], help='which direction to translate', default=LanguageDirection.G2E.name)
+
+    # Cache files and datasets are downloaded here during training, keep them in sync for speed
+    parser.add_argument("--dataset_path", type=str, help='download dataset to this path', default=DATA_DIR_PATH)
 
     # Decoding related args
     parser.add_argument("--decoding_method", type=str, help="pick between different decoding methods", default=DecodingMethod.GREEDY)

@@ -9,6 +9,7 @@ It's aimed at making it **easy for beginners** to start playing and learning abo
   * [Understanding transformers](#understanding-transformers)
   * [Machine translation](#machine-translation)
   * [Setup](#setup)
+  * [Usage](#usage)
   * [HW requirements for training](#hw-requirements-for-training)
 
 ## What are transformers
@@ -87,44 +88,93 @@ Aside from this repo (well duh) I would highly recommend you go ahead and read [
 
 ## Machine translation
 
-Transformer was originally trained on the NMT (neural machine translation) task on the WMT-14 dataset for English->German
-and English->French language pairs. What I did is I trained my models on IWSLT which is much smaller and I used German-English pair,
-both directions. I also am planning to train the fully-trained WMT-14 models take a look at [todo](#todo) section.
+Transformer was originally trained on the NMT (neural machine translation) task on the WMT-14 dataset for:
+* English to German translations (achieved 28.4 [BLEU score](https://en.wikipedia.org/wiki/BLEU))
+* English to French translations (achieved 41.8 BLEU score)
+ 
+What I did (for now) is I trained my models on IWSLT which is much smaller and I trained my models to translate
+from English to German and vice versa, as I speak those 2 so it's easier to debug.
 
-Anyways! Let's see what this repo can practically do for you? Well it can translate from one human language into another!
+I will train WMT-14 models soon, take a look at the [todos](#todos) section.
 
-Concretely I experimented with **German-English** pair as I speak those 2 so it's easier to debug.
+Anyways! Let's see what this repo can practically do for you! Well it can translate from one human language into another!
 
-Examples outputs of my German->English model:
-* I input `Ich bin ein guter Mensch, denke ich.` and I get out `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']`
+Some short outputs from my German to English model:
+I input: `Ich bin ein guter Mensch, denke ich.` <br/>
+and I get out: `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']`
 
 Which is actually pretty good!
 
-### Evaluating - BLEU
+There are of course failure cases like:
+I input: `Ich bin ein Berliner` <br/>
+and I get back: ``
 
-What is BLEU - short description.
+Similarly for the English2German model, I'll link fully trained models down in the [usage](#usage) section.
+
+## Setup
+
+
+
+## Usage
+
+link to my models
+
+### Evaluating NMT models (BLEU metric)
+
+BLEU is an n-gram based metric for quantitatively evaluating the quality of machine translation models.
 
 Training the German->English transformer on IWSLT for 20 epochs I got BLEU of .
 
+Initialization matters! Show BLEU curves from my Azure ML runs: 
+
 ### Visualizing attention
 
+## Hardware requirements
 
-## HW requirements
+You really need a decent hardware if you wish to train the transformer on the **WMT-14** dataset.
 
-This section naturally leads to the next section.
+The authors took:
+* **12h on 8 P100 GPUs** to train the baseline model and **3.5 days** to train the big one.
 
-### todos
-* Add multi-GPU/multi-node support
-* Add beam decoding
+If my calculations are right that amounts to ~19 epochs (100k steps, each step had ~25000 tokens and WMT-14 has ~130M src/trg tokens)
+for the baseline and 3x that for the big one (300k steps).
 
-### My videos
+On the other hand it's much more feasible to train the model on the **IWSLT** dataset. It took me:
+* 13.2 min/epoch (1500 token batch) on my RTX 2080 machine (8 GBs of VRAM)
+* ~34 min/epoch (1500 token batch) on Azure ML's K80s (24 GBs of VRAM)
 
-## Acknoweldgements
+I could have pushed K80s to 3500+ tokens/batch but had some CUDA out of memory problems.
 
+### Todos:
+
+Finally there are a couple more todos which I'll hopefully add really soon:
+* Multi-GPU/multi-node training support (so that you can train a model on WMT-14 for 19 epochs)
+* Beam decoding (turns out it's not that easy to implement this one!)
+* BPE and shared source-target vocab
+
+## Video learning material
+
+I also made a video covering how I approached learning transformers, you can check it out on [my YouTube channel:](https://www.youtube.com/watch?v=bvBK-coXf9I&ab_channel=TheAIEpiphany)
+
+<p align="left">
+<a href="https://www.youtube.com/watch?v=bvBK-coXf9I" target="_blank"><img src="https://img.youtube.com/vi/bvBK-coXf9I/0.jpg" 
+alt="NST Intro" width="480" height="360" border="10" /></a>
+</p>
+
+## Acknowledgements
+
+I found these resources useful (while developing this one):
+
+* [The Annotated Transformer](http://nlp.seas.harvard.edu/2018/04/03/attention.html)
+* [PyTorch official implementation](https://github.com/pytorch/pytorch/blob/187e23397c075ec2f6e89ea75d24371e3fbf9efa/torch/nn/modules/transformer.py)
+
+I found lots of inspiration for the model design in the The Annotated Transformer but I found it hard to understand, and
+it had some bugs. It was mainly written with researchers in mind. Hopefully this repo opens up
+the understanding of transformers to the common folk as well! :nerd_face:
 
 ## Citation
 
-If you find this code useful for your research, please cite the following:
+If you find this code useful, please cite the following:
 
 ```
 @misc{Gordić2020PyTorchOriginalTransformer,

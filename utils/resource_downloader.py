@@ -8,8 +8,8 @@ from torch.hub import download_url_to_file
 from .constants import BINARIES_PATH
 
 
-IWSLT_ENGLISH_TO_GERMAN_MODEL_URL = None
-IWSLT_GERMAN_TO_ENGLISH_MODEL_URL = None
+IWSLT_ENGLISH_TO_GERMAN_MODEL_URL = r'https://www.dropbox.com/s/a6pfo6t9m2dh1jq/iwslt_e2g.pth?dl=1'
+IWSLT_GERMAN_TO_ENGLISH_MODEL_URL = r'https://www.dropbox.com/s/dgcd4xhwig7ygqd/iwslt_g2e.pth?dl=1'
 
 
 # Not yet trained
@@ -48,18 +48,7 @@ def download_models(translation_config):
         exit(0)
 
     print(f'Downloading from {remote_resource_path}. This may take a while.')
-    resource_tmp_path = f'{key}.zip'
-    download_url_to_file(remote_resource_path, resource_tmp_path)
-
-    # Step 4: Unzip the resource
-    print(f'Started unzipping...')
-    with zipfile.ZipFile(resource_tmp_path) as zf:
-        zf.extractall(path=BINARIES_PATH)
-    print(f'Unzipping to: {BINARIES_PATH} finished.')
-
-    # Step 5: remove the temporary resource file
-    os.remove(resource_tmp_path)
-    print(f'Removing tmp file {resource_tmp_path}.')
+    download_url_to_file(remote_resource_path, model_path)
 
     return model_path
 

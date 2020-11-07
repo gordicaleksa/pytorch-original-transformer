@@ -169,16 +169,16 @@ if __name__ == "__main__":
     # Modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
     #
     parser = argparse.ArgumentParser()
-    # According to the paper I infered that the baseline was trained for 20 epochs on the WMT-14 dataset and I got
-    # nice returns up to epoch 20 on IWSLT as well
+    # According to the paper I infered that the baseline was trained for ~19 epochs on the WMT-14 dataset and I got
+    # nice returns up to epoch ~20 on IWSLT as well (nice round number)
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=20)
-    # You should adjust this for your particular machine (I have RTX 2080 with 8 GBs of VRAM so this fits nicely!)
+    # You should adjust this for your particular machine (I have RTX 2080 with 8 GBs of VRAM so 1500 fits nicely!)
     parser.add_argument("--batch_size", type=int, help="target number of tokens in a src/trg batch", default=1500)
 
     # Data related args
     parser.add_argument("--dataset_name", choices=[el.name for el in DatasetType], help='which dataset to use for training', default=DatasetType.IWSLT.name)
+    parser.add_argument("--language_direction", choices=[el.name for el in LanguageDirection], help='which direction to translate', default=LanguageDirection.E2G.name)
     parser.add_argument("--dataset_path", type=str, help='download dataset to this path', default=DATA_DIR_PATH)
-    parser.add_argument("--language_direction", choices=[el.name for el in LanguageDirection], help='which direction to translate', default=LanguageDirection.G2E.name)
 
     # Logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging", default=True)

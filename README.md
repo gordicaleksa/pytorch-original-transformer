@@ -101,7 +101,7 @@ I'll also train my models on WMT-14 soon, take a look at the [todos](#todos) sec
 
 Anyways! Let's see what this repo can practically do for you! Well it can translate!
 
-Some short translations from my German to English IWSLT model: <br/>
+Some short translations from my German to English IWSLT model: <br/><br/>
 Input: `Ich bin ein guter Mensch, denke ich.` ("gold": I am a good person I think) <br/>
 Output: `['<s>', 'I', 'think', 'I', "'m", 'a', 'good', 'person', '.', '</s>']` <br/>
 or in human-readable format: `I think I'm a good person.`
@@ -110,7 +110,7 @@ Which is actually pretty good! Maybe even better IMO than Google Translate's "go
 
 ---
 
-There are of course failure cases like this: <br/>
+There are of course failure cases like this: <br/><br/>
 Input: `Hey Alter, wie geht es dir?` (How is it going dude?) <br/>
 Output: `['<s>', 'Hey', ',', 'age', 'how', 'are', 'you', '?', '</s>']` <br/>
 or in human-readable format: `Hey, age, how are you?` <br/>
@@ -146,11 +146,42 @@ and use the most up-to-date versions of Miniconda and CUDA/cuDNN for your system
 
 ### Training
 
-Just run the `training_script` it will initially take some time to download the dataset automatically.
+To run the training start the `training_script.py`, there is a couple of settings you will want to specify:
+* `--batch_size` - this is important to set to a maximum value that won't give you CUDA out of memory
+* `--dataset_name` - Pick between `IWSLT` and `WMT14` (WMT14 is not advisable until I add multi-GPU support)
+* `--language_direction` - Pick between `E2G` and `G2E`
 
-link to my models
+So an example run (from the console) would look like this: <br/>
+`python trainign_script.py --batch_size 1500 --dataset_name IWSLT --language_direction G2E`
 
-### Evaluating NMT models (BLEU metric)
+The code is well commented so you can (hopefully) understand how the training itself works. <br/>
+
+The script will:
+* Dump checkpoint *.pth models into `models/checkpoints/`
+* Dump the final *.pth model into `models/binaries/`
+* Download IWSLT/WMT-14 (the first time you run it and place it under `data/`)
+* Dump [tensorboard data](#evaluating-nmt-models) into `runs/`, just run `tensorboard --logdir=runs` from your Anaconda
+* Periodically write some training metadata to the console
+
+*Note: data loading is slow in torch text I've implemented a custom wrapper which adds the caching mechanisms
+and makes things ~30x faster!*
+
+### Inference (Translating)
+
+The second part is all about playing with the models and seeing how they translate! <br/>
+To get some translations start the `translation_script.py`, there is a couple of settings you'll want to set:
+* `--source_sentence` - depending on the model you specify this should either be English/German sentence
+* `--model_name` - one of the pretrained model names: `iwslt_e2g`, `iwslt_g2e` or your model(*)
+* `--dataset_name` - keep this in sync with the model, `IWSLT` if the model was trained on IWSLT
+* `--language_direction` - keep in sync, `E2G` if the model was trained to translate from English to German
+
+(*) Note: after you train your model it'll get dumped into `models/binaries` see what it's name is and specify it via
+the `--model_name` parameter if you want to play with it for translation purpose. If you specify some of the pretrained
+models they'll automatically get downloaded the first time you run the translation script.
+
+That's it you can also visualize the attention check out [this section.](Visualizing attention) for more info.
+
+### Evaluating NMT models
 
 I tracked 3 curves while training:
 * training loss (KL divergence, batchmean)
@@ -164,7 +195,7 @@ Current results, models were trained for 20 epochs (DE stands for Deutch i.e. Ge
 
 | Model | BLEU score | Dataset |
 | --- | --- | --- |
-| Baseline transformer (EN-DE) | x | IWSLT val |
+| Baseline transformer (EN-DE) | **27.8** | IWSLT val |
 | Baseline transformer (DE-EN) | **33.2** | IWSLT val |
 | Baseline transformer (EN-DE) | x | WMT-14 val |
 | Baseline transformer (DE-EN) | x | WMT-14 val |

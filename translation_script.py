@@ -81,12 +81,12 @@ if __name__ == "__main__":
     # modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
     #
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source_sentence", type=str, help="source sentence to translate into target", default="Ich bin ein guter Mensch, denke ich.")
-    parser.add_argument("--model_name", type=str, help="transformer model name", default=r'run20_transformer_000000_xavier_init.pth')
+    parser.add_argument("--source_sentence", type=str, help="source sentence to translate into target", default="How are you doing today?")
+    parser.add_argument("--model_name", type=str, help="transformer model name", default=r'iwslt_e2g.pth')
 
     # Keep these 2 in sync with the model you pick via model_name
     parser.add_argument("--dataset_name", type=str, choices=['IWSLT', 'WMT14'], help='which dataset to use for training', default=DatasetType.IWSLT.name)
-    parser.add_argument("--language_direction", type=str, choices=[el.name for el in LanguageDirection], help='which direction to translate', default=LanguageDirection.G2E.name)
+    parser.add_argument("--language_direction", type=str, choices=[el.name for el in LanguageDirection], help='which direction to translate', default=LanguageDirection.E2G.name)
 
     # Cache files and datasets are downloaded here during training, keep them in sync for speed
     parser.add_argument("--dataset_path", type=str, help='download dataset to this path', default=DATA_DIR_PATH)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--beam_size", type=int, help="used only in case decoding method is chosen", default=4)
     parser.add_argument("--length_penalty_coefficient", type=int, help="length penalty for the beam search", default=0.6)
 
-    parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=True)
+    parser.add_argument("--visualize_attention", type=bool, help="should visualize encoder/decoder attention", default=False)
     args = parser.parse_args()
 
     # Wrapping training configuration into a dictionary

@@ -96,6 +96,7 @@ def get_beam_decoder(translation_config):
     length_penalty_coefficient = translation_config['length_penalty_coefficient']
 
     def beam_decoding(baseline_transformer, src_representations_batch, src_mask, trg_field_processor, max_target_tokens=100):
+        raise Exception('Not yet implemented.')
         device = next(baseline_transformer.parameters()).device
         pad_token_id = trg_field_processor.vocab.stoi[PAD_TOKEN]
 

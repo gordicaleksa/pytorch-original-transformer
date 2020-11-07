@@ -148,7 +148,7 @@ and use the most up-to-date versions of Miniconda and CUDA/cuDNN for your system
 
 To run the training start the `training_script.py`, there is a couple of settings you will want to specify:
 * `--batch_size` - this is important to set to a maximum value that won't give you CUDA out of memory
-* `--dataset_name` - Pick between `IWSLT` and `WMT14` (WMT14 is not advisable until I add multi-GPU support)
+* `--dataset_name` - Pick between `IWSLT` and `WMT14` (WMT14 is not advisable [until I add](#todos) multi-GPU support)
 * `--language_direction` - Pick between `E2G` and `G2E`
 
 So an example run (from the console) would look like this: <br/>
@@ -177,9 +177,11 @@ To get some translations start the `translation_script.py`, there is a couple of
 
 (*) Note: after you train your model it'll get dumped into `models/binaries` see what it's name is and specify it via
 the `--model_name` parameter if you want to play with it for translation purpose. If you specify some of the pretrained
-models they'll automatically get downloaded the first time you run the translation script.
+models they'll **automatically get downloaded** the first time you run the translation script.
 
-That's it you can also visualize the attention check out [this section.](Visualizing attention) for more info.
+I'll link IWSLT pretrained model links here as well: [English to German](https://www.dropbox.com/s/a6pfo6t9m2dh1jq/iwslt_e2g.pth?dl=1) and [German to English.](https://www.dropbox.com/s/dgcd4xhwig7ygqd/iwslt_g2e.pth?dl=1)
+
+That's it you can also visualize the attention check out [this section.](#visualizing-attention) for more info.
 
 ### Evaluating NMT models
 
@@ -195,8 +197,8 @@ Current results, models were trained for 20 epochs (DE stands for Deutch i.e. Ge
 
 | Model | BLEU score | Dataset |
 | --- | --- | --- |
-| Baseline transformer (EN-DE) | **27.8** | IWSLT val |
-| Baseline transformer (DE-EN) | **33.2** | IWSLT val |
+| [Baseline transformer (EN-DE)](https://www.dropbox.com/s/a6pfo6t9m2dh1jq/iwslt_e2g.pth?dl=1) | **27.8** | IWSLT val |
+| [Baseline transformer (DE-EN)](https://www.dropbox.com/s/dgcd4xhwig7ygqd/iwslt_g2e.pth?dl=1) | **33.2** | IWSLT val |
 | Baseline transformer (EN-DE) | x | WMT-14 val |
 | Baseline transformer (DE-EN) | x | WMT-14 val |
 
@@ -231,21 +233,23 @@ model was "paying attention to" in the source and target sentences.
 
 Here are the attentions I get for the input sentence `Ich bin ein guter Mensch, denke ich.`
 
+These belong to layer 6 of the encoder. You can see all of the 8 multi-head attention heads.
+
 <p align="center">
 <img src="data/readme_pics/attention_enc_self.PNG" width="850"/>
 </p>
 
-These belong to layer 4 of the encoder. You can see all of the 8 multi-head attention heads.
+And this one belongs to decoder layer 6 of the self-attention decoder MHA (multi-head attention) module. <br/>
+You can notice an interesting **triangular pattern** which comes from the fact that target tokens can't look ahead!
 
 <p align="center">
 <img src="data/readme_pics/attention_dec_self.PNG" width="850"/>
 </p>
 
-And this one belongs to layer 1 of the decoder. You can notice an interesting **triangular pattern** which 
-comes from the fact that target tokens can't look ahead!
+The 3rd type of MHA module is the source attending one and it looks similar to the plot you saw for the encoder. <br/>
+Feel free to play with it at your own pace!
 
-The 3rd type of MHA (multi-head attention) module is the source attending one but it looks similar to the
-plot you saw for the encoder.
+*Note: there are obviously some bias problems with this model but I won't get into that analysis here*
 
 ## Hardware requirements
 

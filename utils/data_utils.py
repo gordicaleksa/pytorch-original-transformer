@@ -109,7 +109,6 @@ def save_cache(cache_path, dataset):
 #
 
 
-# todo: add BPE
 def get_datasets_and_vocabs(dataset_path, language_direction, use_iwslt=True, use_caching_mechanism=True):
     german_to_english = language_direction == LanguageDirection.G2E.name
     spacy_de = spacy.load('de_core_news_sm')

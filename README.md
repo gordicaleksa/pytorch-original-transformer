@@ -1,6 +1,6 @@
 ## The Original Transformer (PyTorch) :computer: = :rainbow:
-This repo contains PyTorch implementation of the original transformer paper (:link: [Vaswani et al.](https://arxiv.org/pdf/1706.03762.pdf)). <br/>
-It's aimed at making it **easy for beginners** to start playing and learning about transformers. <br/>
+This repo contains PyTorch implementation of the original transformer paper (:link: [Vaswani et al.](https://arxiv.org/abs/1706.03762)). <br/>
+It's aimed at making it **easy to start playing and learning** about transformers. <br/>
 
 **Important note:** I'll be adding a jupyter notebook soon as well!
 
@@ -14,7 +14,7 @@ It's aimed at making it **easy for beginners** to start playing and learning abo
 
 ## What are transformers
 
-Transformers were originally proposed by Vaswani et al. in a seminal paper called [Attention Is All You Need](https://papers.nips.cc/paper/5423-generative-adversarial-nets.pdf).
+Transformers were originally proposed by Vaswani et al. in a seminal paper called [Attention Is All You Need](https://arxiv.org/pdf/1706.03762.pdf).
 
 You probably heard of transformers one way or another. **GPT-3 and BERT** to name a few well known ones :unicorn:. The main idea
 is that they showed that you don't have to use recurrent or convolutional layers and that simple architecture coupled with attention is super powerful. It
@@ -65,7 +65,7 @@ Noup? So I thought, here it is visualized:
 </p>
 
 It's super easy to understand now. Now whether this part was crucial for the success of transformer? I doubt it.
-But it's cool and makes things more complicated. :nerd_face:
+But it's cool and makes things more complicated. :nerd_face: (`.set_sarcasm(True)`)
 
 *Note: model dimension is basically the size of the embedding vector, baseline transformer used 512, the big one 1024*
 
@@ -152,7 +152,7 @@ To run the training start the `training_script.py`, there is a couple of setting
 * `--language_direction` - Pick between `E2G` and `G2E`
 
 So an example run (from the console) would look like this: <br/>
-`python trainign_script.py --batch_size 1500 --dataset_name IWSLT --language_direction G2E`
+`python training_script.py --batch_size 1500 --dataset_name IWSLT --language_direction G2E`
 
 The code is well commented so you can (hopefully) understand how the training itself works. <br/>
 
@@ -163,8 +163,8 @@ The script will:
 * Dump [tensorboard data](#evaluating-nmt-models) into `runs/`, just run `tensorboard --logdir=runs` from your Anaconda
 * Periodically write some training metadata to the console
 
-*Note: data loading is slow in torch text I've implemented a custom wrapper which adds the caching mechanisms
-and makes things ~30x faster!*
+*Note: data loading is slow in torch text, and so I've implemented a custom wrapper which adds the caching mechanisms
+and makes things ~30x faster! (it'll be slow the first time you run stuff)*
 
 ### Inference (Translating)
 
@@ -274,6 +274,9 @@ Finally there are a couple more todos which I'll hopefully add really soon:
 * Beam decoding (turns out it's not that easy to implement this one!)
 * BPE and shared source-target vocab (I'm using SpaCy now)
 
+The repo already has everything it needs, these are just the bonus points. I've tested everything
+from environment setup, to automatic model download, etc.
+
 ## Video learning material
 
 I also made a video covering how I approached learning transformers, you can check it out on [my YouTube channel:](https://www.youtube.com/watch?v=bvBK-coXf9I&ab_channel=TheAIEpiphany)
@@ -290,7 +293,7 @@ I found these resources useful (while developing this one):
 * [The Annotated Transformer](http://nlp.seas.harvard.edu/2018/04/03/attention.html)
 * [PyTorch official implementation](https://github.com/pytorch/pytorch/blob/187e23397c075ec2f6e89ea75d24371e3fbf9efa/torch/nn/modules/transformer.py)
 
-I found lots of inspiration for the model design in the The Annotated Transformer but I found it hard to understand, and
+I found some inspiration for the model design in the The Annotated Transformer but I found it hard to understand, and
 it had some bugs. It was mainly written with researchers in mind. Hopefully this repo opens up
 the understanding of transformers to the common folk as well! :nerd_face:
 

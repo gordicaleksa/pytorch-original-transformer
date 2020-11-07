@@ -5,9 +5,6 @@
 
 """
 
-# todo: write README (add attention visualization to README, plot signal tokens vs pad tokens for different
-#  bucketiterator setup) and open-source
-# todo: fix the integer division warning
 
 import argparse
 import time
@@ -71,8 +68,6 @@ def get_train_val_loop(baseline_transformer, custom_lr_optimizer, kl_div_loss, l
             #
             # Logging and metrics
             #
-
-            # todo: gradient clipping for stability?
 
             if is_train:
                 global_train_step += 1
@@ -151,6 +146,7 @@ def train_transformer(training_config):
         # Validation loop
         with torch.no_grad():
             train_val_loop(is_train=False, token_ids_loader=val_token_ids_loader, epoch=epoch)
+
             bleu_score = utils.calculate_bleu_score(baseline_transformer, val_token_ids_loader, trg_field_processor)
             if training_config['enable_tensorboard']:
                 writer.add_scalar('bleu_score', bleu_score, epoch)

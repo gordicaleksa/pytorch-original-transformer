@@ -23,7 +23,6 @@ import torch.nn as nn
 from utils.constants import *
 
 
-# todo: consider sharing the embeddings as in the original paper
 class Transformer(nn.Module):
 
     def __init__(self, model_dimension, src_vocab_size, trg_vocab_size, number_of_heads, number_of_layers, dropout_probability, log_attention_weights=False):

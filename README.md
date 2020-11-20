@@ -2,8 +2,6 @@
 This repo contains PyTorch implementation of the original transformer paper (:link: [Vaswani et al.](https://arxiv.org/abs/1706.03762)). <br/>
 It's aimed at making it **easy to start playing and learning** about transformers. <br/>
 
-**Important note:** I'll be adding a jupyter notebook soon as well!
-
 ## Table of Contents
   * [What are transformers?](#what-are-transformers)
   * [Understanding transformers](#understanding-transformers)
@@ -143,6 +141,20 @@ Follow through points 1 and 2 of [this setup](https://github.com/Petlja/PSIML/bl
 and use the most up-to-date versions of Miniconda and CUDA/cuDNN for your system.
 
 ## Usage
+
+#### Option 1: Jupyter Notebook
+
+Just run `jupyter notebook` from you Anaconda console and it will open the session in your default browser. <br/>
+Open `The Annotated Transformer ++.ipynb` and you're ready to play! <br/>
+
+---
+
+**Note:** if you get `DLL load failed while importing win32api: The specified module could not be found` <br/>
+Just do `pip uninstall pywin32` and then either `pip install pywin32` or `conda install pywin32` [should fix it](https://github.com/jupyter/notebook/issues/4980)!
+
+#### Option 2: Use your IDE of choice
+
+You just need to link the Python environment you created in the [setup](#setup) section.
 
 ### Training
 

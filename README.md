@@ -283,7 +283,7 @@ I also made a video covering how I approached learning transformers, you can che
 
 <p align="left">
 <a href="https://www.youtube.com/watch?v=bvBK-coXf9I" target="_blank"><img src="https://img.youtube.com/vi/bvBK-coXf9I/0.jpg" 
-alt="NST Intro" width="480" height="360" border="10" /></a>
+alt="learning about transformers" width="480" height="360" border="10" /></a>
 </p>
 
 ## Acknowledgements

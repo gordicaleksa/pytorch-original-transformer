@@ -24,7 +24,7 @@ class LanguageDirection(enum.Enum):
 
 
 #
-# Caching mechanism datasets and functions (you don't need this but it makes things a lot faster!
+# Caching mechanism datasets and functions (you don't need this but it makes things a lot faster!)
 #
 
 

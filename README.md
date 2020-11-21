@@ -16,7 +16,7 @@ Transformers were originally proposed by Vaswani et al. in a seminal paper calle
 
 You probably heard of transformers one way or another. **GPT-3 and BERT** to name a few well known ones :unicorn:. The main idea
 is that they showed that you don't have to use recurrent or convolutional layers and that simple architecture coupled with attention is super powerful. It
-gave the benefit of **much better long-range dependencies modeling** and the architecture itself is very **parallelizable** (:computer::computer::computer:) which leads to higher compute efficiency!
+gave the benefit of **much better long-range dependency modeling** and the architecture itself is highly **parallelizable** (:computer::computer::computer:) which leads to better compute efficiency!
 
 Here is how their beautifully simple architecture looks like:
 

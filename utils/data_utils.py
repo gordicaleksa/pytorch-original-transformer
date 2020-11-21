@@ -222,13 +222,12 @@ def batch_size_fn(new_example, count, sofar):
 def get_data_loaders(dataset_path, language_direction, dataset_name, batch_size, device):
     train_dataset, val_dataset, src_field_processor, trg_field_processor = get_datasets_and_vocabs(dataset_path, language_direction, dataset_name == DatasetType.IWSLT.name)
 
-    # using default sorting function which
     train_token_ids_loader, val_token_ids_loader = BucketIterator.splits(
      datasets=(train_dataset, val_dataset),
      batch_size=batch_size,
      device=device,
-     sort_within_batch=True,
-     batch_size_fn=batch_size_fn
+     sort_within_batch=True,  # this part is really important otherwise we won't group similar length sentences
+     batch_size_fn=batch_size_fn  # this helps us max out GPU's VRAM
     )
 
     return train_token_ids_loader, val_token_ids_loader, src_field_processor, trg_field_processor

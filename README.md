@@ -291,12 +291,17 @@ from environment setup, to automatic model download, etc.
 
 ## Video learning material
 
-I also made a video covering how I approached learning transformers, you can check it out on [my YouTube channel:](https://www.youtube.com/watch?v=bvBK-coXf9I&ab_channel=TheAIEpiphany)
+If you're having difficulties understanding the code I did an in-depth overview of the paper [in this video:](https://www.youtube.com/watch?v=cbYxHkgkSVs)
 
 <p align="left">
-<a href="https://www.youtube.com/watch?v=bvBK-coXf9I" target="_blank"><img src="https://img.youtube.com/vi/bvBK-coXf9I/0.jpg" 
-alt="learning about transformers" width="480" height="360" border="10" /></a>
+<a href="https://www.youtube.com/watch?v=cbYxHkgkSVs" target="_blank"><img src="https://img.youtube.com/vi/cbYxHkgkSVs/0.jpg" 
+alt="A deep dive into the attention is all you need paper" width="480" height="360" border="10" /></a>
 </p>
+
+I have some more videos which could further help you understand transformers:
+* [My approach to understanding NLP/transformers](https://www.youtube.com/watch?v=bvBK-coXf9I)
+* [Another overview of the paper (a bit higher level)](https://www.youtube.com/watch?v=n9sLZPLOxG8)
+* [A case study of how this project was developed](https://www.youtube.com/watch?v=px4rtkWHFvM)
 
 ## Acknowledgements
 
